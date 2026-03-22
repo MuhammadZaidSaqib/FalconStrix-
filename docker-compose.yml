@@ -1,0 +1,18 @@
+services:
+  mariadb:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: rootdev
+      MARIADB_DATABASE: hidrs_db
+      MARIADB_USER: hidrs
+      MARIADB_PASSWORD: hidrs_secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - hidrs_mariadb_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/sample_data.sql:/docker-entrypoint-initdb.d/02-sample.sql:ro
+
+volumes:
+  hidrs_mariadb_data:

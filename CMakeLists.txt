@@ -1,10 +1,5 @@
-cmake_minimum_required(VERSION 4.0)
-project(FalconStrix)
+cmake_minimum_required(VERSION 3.16)
+project(FalconStrix_HIDRS LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 14)
-
-include_directories(.)
-
-add_executable(FalconStrix
-        backend.cpp
-)
+# Blue Team OS engine (build on Kali with: cmake -S . -B build && cmake --build build)
+add_subdirectory(os_engine_cpp)

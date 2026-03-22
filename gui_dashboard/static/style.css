@@ -1,0 +1,256 @@
+:root {
+  --bg: #0b0f14;
+  --panel: #121822;
+  --border: #1e2633;
+  --text: #e8edf7;
+  --muted: #8b98ad;
+  --accent: #3ddc97;
+  --warn: #f5c542;
+  --danger: #ff4d4d;
+  --info: #5ac8fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body.theme-dark {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: radial-gradient(1200px 600px at 10% -10%, #152238 0%, var(--bg) 55%);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+body.critical {
+  background: radial-gradient(1200px 600px at 90% -10%, #3a1010 0%, #140606 55%);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 1.25rem 2rem;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+}
+
+.sub {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.logo-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 18px var(--accent);
+}
+
+.state-cluster {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.led-strip {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.led {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  opacity: 0.25;
+  filter: saturate(0.4);
+}
+
+.led-green {
+  background: #2ecc71;
+}
+.led-yellow {
+  background: #f1c40f;
+}
+.led-red {
+  background: #e74c3c;
+}
+
+.led-strip[data-led="GREEN"] .led-green {
+  opacity: 1;
+  filter: none;
+  box-shadow: 0 0 12px #2ecc71;
+}
+.led-strip[data-led="YELLOW"] .led-yellow {
+  opacity: 1;
+  filter: none;
+  box-shadow: 0 0 12px #f1c40f;
+}
+.led-strip[data-led="RED"] .led-red {
+  opacity: 1;
+  filter: none;
+  box-shadow: 0 0 14px #e74c3c;
+}
+
+.fsm-panel {
+  min-width: 200px;
+  padding: 0.6rem 1rem;
+  background: var(--panel);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.fsm-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
+.fsm-state {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-top: 0.2rem;
+}
+
+.fsm-reason {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+  max-width: 320px;
+}
+
+.gauge-wrap {
+  text-align: center;
+}
+
+.gauge-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
+.db-banner {
+  background: linear-gradient(90deg, #3a3010, #5c4a12);
+  color: #fff;
+  padding: 0.65rem 2rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--warn);
+}
+
+.db-banner.hidden {
+  display: none;
+}
+
+.db-banner .meta {
+  color: #e8d9a8;
+  font-size: 0.8rem;
+  display: block;
+  margin-top: 0.35rem;
+}
+
+.db-banner code {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.locked-banner {
+  background: linear-gradient(90deg, #5a1010, #8b1d1d);
+  color: #fff;
+  padding: 0.75rem 2rem;
+  font-size: 0.95rem;
+  border-bottom: 1px solid #ff6b6b;
+}
+
+.locked-banner.hidden {
+  display: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1.25rem 2rem 2rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+}
+
+.panel.wide {
+  grid-column: 1 / -1;
+}
+
+.panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.feed {
+  max-height: 320px;
+  overflow: auto;
+  font-size: 0.82rem;
+}
+
+.feed-compact {
+  max-height: 220px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  margin-bottom: 0.45rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.card .meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.sev-CRITICAL,
+.sev-HIGH {
+  border-left: 3px solid var(--danger);
+}
+.sev-MEDIUM {
+  border-left: 3px solid var(--warn);
+}
+.sev-LOW,
+.sev-INFO {
+  border-left: 3px solid var(--info);
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,1 +1,7 @@
-mysql-connector-python
+# Python 3.10+ (Windows or Kali) — pip install -r requirements.txt
+mysql-connector-python>=8.2.0
+Flask>=3.0.0
+Flask-SocketIO>=5.3.0
+python-socketio>=5.11.0
+python-engineio>=4.8.0
+python-dotenv>=1.0.0
