@@ -116,27 +116,56 @@ void* resp_entry(void* p) {
     return nullptr;
 }
 
-int parentMain(const char* cmd_fifo, int pipe_write_end) {
+int parentMain(const char* cmd_fifo, int pipe_write_end, pid_t child_pid) {
     std::signal(SIGPIPE, SIG_IGN);
     std::cout << "[os_engine parent] reading commands from " << cmd_fifo << std::endl;
+    std::string acc;
+    char buf[1024];
     while (true) {
-        std::ifstream in(cmd_fifo);
-        if (!in) {
+        int fd = open(cmd_fifo, O_RDONLY | O_NONBLOCK);
+        if (fd < 0) {
             std::cerr << "[os_engine parent] failed to open cmd fifo, retry\n";
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
-        std::string line;
-        while (std::getline(in, line)) {
-            if (line.empty()) {
-                continue;
+        for (;;) {
+            int st = 0;
+            pid_t wp = waitpid(child_pid, &st, WNOHANG);
+            if (wp == child_pid) {
+                std::cerr << "[os_engine parent] child exited, restart requested\n";
+                close(fd);
+                return 2;
             }
-            line.push_back('\n');
-            ssize_t w = ::write(pipe_write_end, line.c_str(), line.size());
-            if (w < 0) {
-                std::cerr << "[os_engine parent] pipe write error\n";
+
+            ssize_t n = ::read(fd, buf, sizeof(buf));
+            if (n > 0) {
+                acc.append(buf, static_cast<size_t>(n));
+                for (;;) {
+                    auto pos = acc.find('\n');
+                    if (pos == std::string::npos) {
+                        break;
+                    }
+                    std::string line = acc.substr(0, pos + 1);
+                    acc.erase(0, pos + 1);
+                    if (line == "\n") {
+                        continue;
+                    }
+                    ssize_t w = ::write(pipe_write_end, line.c_str(), line.size());
+                    if (w < 0) {
+                        std::cerr << "[os_engine parent] pipe write error\n";
+                    }
+                }
+            } else if (n == 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(80));
+            } else {
+                if (errno == EAGAIN || errno == EINTR) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(80));
+                    continue;
+                }
+                break;
             }
         }
+        close(fd);
     }
     return 0;
 }
@@ -186,29 +215,42 @@ int main(int argc, char** argv) {
     const char* events_fifo = envOr("HIDRS_EVENTS_FIFO", kDefaultEventsFifo);
     const char* cmd_fifo = envOr("HIDRS_CMD_FIFO", kDefaultCmdFifo);
 
-    int fds[2];
-    if (pipe(fds) != 0) {
-        std::cerr << "pipe() failed\n";
-        return 1;
-    }
+    int restart_budget = 10;
+    while (restart_budget-- > 0) {
+        int fds[2];
+        if (pipe(fds) != 0) {
+            std::cerr << "pipe() failed\n";
+            return 1;
+        }
 
-    pid_t pid = fork();
-    if (pid < 0) {
-        std::cerr << "fork() failed\n";
-        return 1;
-    }
-    if (pid == 0) {
-        close(fds[1]);
-        int rc = childMain(events_fifo, fds[0]);
+        pid_t pid = fork();
+        if (pid < 0) {
+            std::cerr << "fork() failed\n";
+            close(fds[0]);
+            close(fds[1]);
+            return 1;
+        }
+        if (pid == 0) {
+            close(fds[1]);
+            int rc = childMain(events_fifo, fds[0]);
+            close(fds[0]);
+            _exit(rc);
+        }
+
         close(fds[0]);
-        _exit(rc);
-    }
+        int rc = parentMain(cmd_fifo, fds[1], pid);
+        close(fds[1]);
 
-    close(fds[0]);
-    int rc = parentMain(cmd_fifo, fds[1]);
-    close(fds[1]);
-    kill(pid, SIGTERM);
-    int st = 0;
-    waitpid(pid, &st, 0);
-    return rc;
+        if (rc == 2) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            continue;
+        }
+
+        kill(pid, SIGTERM);
+        int st = 0;
+        waitpid(pid, &st, 0);
+        return rc;
+    }
+    std::cerr << "[os_engine parent] restart budget exhausted\n";
+    return 2;
 }

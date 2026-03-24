@@ -18,9 +18,11 @@ private:
     void checkSpike();
     void checkAuthLog();
     void checkWatchFile();
+    void checkResourcePressure();
 
     EventWriter* writer_;
     int last_proc_count_;
     long last_auth_size_;
     long last_watch_mtime_;
+    float last_load1_;
 };

@@ -37,6 +37,53 @@ std::string readComm(pid_t pid) {
     return {};
 }
 
+std::string readCmdline(pid_t pid) {
+    std::string path = "/proc/" + std::to_string(pid) + "/cmdline";
+    std::ifstream f(path, std::ios::binary);
+    if (!f) {
+        return {};
+    }
+    std::string raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    if (raw.empty()) {
+        return {};
+    }
+    for (char& c : raw) {
+        if (c == '\0') {
+            c = ' ';
+        }
+    }
+    return raw;
+}
+
+std::string readProcessState(pid_t pid) {
+    std::string path = "/proc/" + std::to_string(pid) + "/status";
+    std::ifstream f(path);
+    if (!f) {
+        return {};
+    }
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.rfind("State:", 0) == 0) {
+            return line;
+        }
+    }
+    return {};
+}
+
+std::string jsonEscape(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 8);
+    for (char c : s) {
+        if (c == '\\') out += "\\\\";
+        else if (c == '"') out += "\\\"";
+        else if (c == '\n') out += "\\n";
+        else if (c == '\r') out += "\\r";
+        else if (c == '\t') out += "\\t";
+        else out.push_back(c);
+    }
+    return out;
+}
+
 } // namespace
 
 ProcessMonitor::ProcessMonitor(EventWriter* writer) : writer_(writer) {}
@@ -92,8 +139,11 @@ void ProcessMonitor::scanOnce() {
             if (i) {
                 payload << ',';
             }
+            std::string cmdline = readCmdline(suspicious[i].first);
+            std::string state = readProcessState(suspicious[i].first);
             payload << "{\"pid\":" << suspicious[i].first << ",\"name\":\""
-                    << suspicious[i].second << "\"}";
+                    << jsonEscape(suspicious[i].second) << "\",\"cmdline\":\""
+                    << jsonEscape(cmdline) << "\",\"status\":\"" << jsonEscape(state) << "\"}";
         }
         payload << "]}";
         writer_->writeLine(payload.str());
