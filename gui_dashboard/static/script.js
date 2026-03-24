@@ -1,6 +1,9 @@
 /* global Chart, io, window */
 
 const body = document.getElementById("body-root");
+const startupSplash = document.getElementById("startup-splash");
+const dashboardContent = document.getElementById("dashboard-content");
+const splashName = document.getElementById("splash-name");
 const lockedBanner = document.getElementById("locked-banner");
 const fsmState = document.getElementById("fsm-state");
 const fsmReason = document.getElementById("fsm-reason");
@@ -12,6 +15,38 @@ const eventFeed = document.getElementById("event-feed");
 
 let gaugeChart;
 let alertsChart;
+
+function startIntroAnimation() {
+  if (!startupSplash || !dashboardContent) return;
+
+  const finishSplash = () => {
+    startupSplash.classList.add("fade-out");
+    dashboardContent.classList.remove("hidden-on-load");
+    dashboardContent.classList.add("visible");
+  };
+
+  if (!splashName) {
+    setTimeout(finishSplash, 2000);
+    return;
+  }
+
+  const fullText = splashName.dataset.text || "FalconStrix";
+  const typingStepMs = 110;
+  splashName.textContent = "";
+  splashName.classList.add("typing");
+
+  let index = 0;
+  const typer = setInterval(() => {
+    index += 1;
+    splashName.textContent = fullText.slice(0, index);
+    if (index >= fullText.length) {
+      clearInterval(typer);
+      splashName.classList.remove("typing");
+      splashName.classList.add("activated");
+      setTimeout(finishSplash, 950);
+    }
+  }, typingStepMs);
+}
 
 function renderGauge(level) {
   const ctx = document.getElementById("threatGauge");
@@ -177,3 +212,5 @@ socket.on("soc_update", (snap) => paint(snap));
 if (window.__INITIAL__) {
   paint(window.__INITIAL__);
 }
+
+startIntroAnimation();

@@ -26,6 +26,131 @@ body.critical {
   background: radial-gradient(1200px 600px at 90% -10%, #3a1010 0%, #140606 55%);
 }
 
+.dashboard-content {
+  opacity: 1;
+  transition: opacity 300ms ease;
+}
+
+.dashboard-content.hidden-on-load {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dashboard-content.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.startup-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(950px 420px at 50% 25%, #1a2a47 0%, #0b0f14 58%);
+  transition: opacity 420ms ease, visibility 420ms ease;
+}
+
+.startup-splash.fade-out {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.splash-center {
+  text-align: center;
+  padding: 1rem;
+}
+
+.splash-orb {
+  width: 18px;
+  height: 18px;
+  margin: 0 auto 0.85rem;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 22px rgba(61, 220, 151, 0.95);
+  animation: pulse-orb 1000ms ease-in-out infinite alternate;
+}
+
+.splash-name {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 4.2rem);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f5f9ff;
+  opacity: 1;
+  min-height: 1.15em;
+  text-shadow: 0 0 0 transparent;
+}
+
+.splash-name.typing::after {
+  content: "_";
+  color: var(--accent);
+  margin-left: 0.08em;
+  animation: blink-cursor 550ms step-end infinite;
+}
+
+.splash-name.activated {
+  animation: activate-name 700ms ease;
+}
+
+.splash-tagline {
+  margin: 0.75rem 0 0;
+  color: #8ea1be;
+  font-size: clamp(0.85rem, 1.5vw, 1rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: reveal-tagline 800ms ease 350ms forwards;
+}
+
+@keyframes activate-name {
+  0% {
+    text-shadow: 0 0 0 rgba(61, 220, 151, 0);
+    transform: scale(1);
+  }
+  40% {
+    text-shadow: 0 0 18px rgba(61, 220, 151, 0.95), 0 0 36px rgba(90, 200, 250, 0.6);
+    transform: scale(1.02);
+  }
+  100% {
+    text-shadow: 0 0 8px rgba(61, 220, 151, 0.45);
+    transform: scale(1);
+  }
+}
+
+@keyframes reveal-tagline {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-orb {
+  from {
+    transform: scale(0.9);
+    opacity: 0.75;
+  }
+  to {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+}
+
+@keyframes blink-cursor {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;

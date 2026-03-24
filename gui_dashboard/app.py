@@ -143,18 +143,27 @@ def main():
     import os
     import threading
 
+    def _host() -> str:
+        raw = os.environ.get("DASHBOARD_HOST")
+        if raw is None or not str(raw).strip():
+            return "127.0.0.1"
+        return str(raw).strip()
+
     def _port() -> int:
         raw = os.environ.get("DASHBOARD_PORT")
         if raw is None or not str(raw).strip():
             return 5000
         return int(str(raw).strip())
 
+    host = _host()
+    port = _port()
     threading.Thread(target=_background_poll, daemon=True).start()
     print(f"[dashboard] repo root (load .env from here): {ROOT}", flush=True)
+    print(f"[dashboard] open in Cursor preview: http://{host}:{port}", flush=True)
     socketio.run(
         app,
-        host="0.0.0.0",
-        port=_port(),
+        host=host,
+        port=port,
         allow_unsafe_werkzeug=True,
     )
 

@@ -9,60 +9,70 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body class="theme-dark" id="body-root">
-  <header class="topbar">
-    <div class="brand">
-      <span class="logo-dot"></span>
-      <div>
-        <h1>HIDRS SOC</h1>
-        <p class="sub">Hybrid Behavioral Monitoring &amp; Response</p>
-      </div>
+  <div id="startup-splash" class="startup-splash">
+    <div class="splash-center">
+      <div class="splash-orb" aria-hidden="true"></div>
+      <h1 id="splash-name" class="splash-name" data-text="FalconStrix"></h1>
+      <p class="splash-tagline">Security Operations Dashboard</p>
     </div>
-    <div class="state-cluster">
-      <div id="led-strip" class="led-strip" data-led="GREEN">
-        <span class="led led-green" title="NORMAL / Green LED"></span>
-        <span class="led led-yellow" title="WARNING / Yellow LED"></span>
-        <span class="led led-red" title="LOCKED / Red LED"></span>
-      </div>
-      <div class="fsm-panel">
-        <div class="fsm-label">FSM State</div>
-        <div id="fsm-state" class="fsm-state">NORMAL</div>
-        <div id="fsm-reason" class="fsm-reason"></div>
-      </div>
-      <div class="gauge-wrap">
-        <div class="gauge-label">Threat level</div>
-        <canvas id="threatGauge" width="160" height="90"></canvas>
-      </div>
-    </div>
-  </header>
-
-  <div id="db-banner" class="db-banner hidden"></div>
-
-  <div id="locked-banner" class="locked-banner hidden">
-    <strong>DEFENSIVE MODE</strong> — FSM LOCKED. Automated response engaged. Dashboard in critical styling.
   </div>
 
-  <main class="grid">
-    <section class="panel wide">
-      <h2>Alert volume (60 min)</h2>
-      <canvas id="alertsChart" height="120"></canvas>
-    </section>
-    <section class="panel">
-      <h2>Live alerts</h2>
-      <div id="alert-feed" class="feed"></div>
-    </section>
-    <section class="panel">
-      <h2>Suspicious processes</h2>
-      <div id="proc-feed" class="feed"></div>
-    </section>
-    <section class="panel">
-      <h2>Response log</h2>
-      <div id="resp-feed" class="feed"></div>
-    </section>
-    <section class="panel wide">
-      <h2>Recent events</h2>
-      <div id="event-feed" class="feed feed-compact"></div>
-    </section>
-  </main>
+  <div id="dashboard-content" class="dashboard-content hidden-on-load">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo-dot"></span>
+        <div>
+          <h1>HIDRS SOC</h1>
+          <p class="sub">Hybrid Behavioral Monitoring &amp; Response</p>
+        </div>
+      </div>
+      <div class="state-cluster">
+        <div id="led-strip" class="led-strip" data-led="GREEN">
+          <span class="led led-green" title="NORMAL / Green LED"></span>
+          <span class="led led-yellow" title="WARNING / Yellow LED"></span>
+          <span class="led led-red" title="LOCKED / Red LED"></span>
+        </div>
+        <div class="fsm-panel">
+          <div class="fsm-label">FSM State</div>
+          <div id="fsm-state" class="fsm-state">NORMAL</div>
+          <div id="fsm-reason" class="fsm-reason"></div>
+        </div>
+        <div class="gauge-wrap">
+          <div class="gauge-label">Threat level</div>
+          <canvas id="threatGauge" width="160" height="90"></canvas>
+        </div>
+      </div>
+    </header>
+
+    <div id="db-banner" class="db-banner hidden"></div>
+
+    <div id="locked-banner" class="locked-banner hidden">
+      <strong>DEFENSIVE MODE</strong> — FSM LOCKED. Automated response engaged. Dashboard in critical styling.
+    </div>
+
+    <main class="grid">
+      <section class="panel wide">
+        <h2>Alert volume (60 min)</h2>
+        <canvas id="alertsChart" height="120"></canvas>
+      </section>
+      <section class="panel">
+        <h2>Live alerts</h2>
+        <div id="alert-feed" class="feed"></div>
+      </section>
+      <section class="panel">
+        <h2>Suspicious processes</h2>
+        <div id="proc-feed" class="feed"></div>
+      </section>
+      <section class="panel">
+        <h2>Response log</h2>
+        <div id="resp-feed" class="feed"></div>
+      </section>
+      <section class="panel wide">
+        <h2>Recent events</h2>
+        <div id="event-feed" class="feed feed-compact"></div>
+      </section>
+    </main>
+  </div>
 
   <script>
     window.__INITIAL__ = {{ initial | tojson }};
