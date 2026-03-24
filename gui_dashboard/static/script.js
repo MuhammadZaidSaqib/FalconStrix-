@@ -31,21 +31,24 @@ function startIntroAnimation() {
   }
 
   const fullText = splashName.dataset.text || "FalconStrix";
-  const typingStepMs = 110;
+  const typingStepMs = 180;
+  const typingStartDelayMs = 280;
   splashName.textContent = "";
   splashName.classList.add("typing");
 
   let index = 0;
-  const typer = setInterval(() => {
-    index += 1;
-    splashName.textContent = fullText.slice(0, index);
-    if (index >= fullText.length) {
-      clearInterval(typer);
-      splashName.classList.remove("typing");
-      splashName.classList.add("activated");
-      setTimeout(finishSplash, 950);
-    }
-  }, typingStepMs);
+  setTimeout(() => {
+    const typer = setInterval(() => {
+      index += 1;
+      splashName.textContent = fullText.slice(0, index);
+      if (index >= fullText.length) {
+        clearInterval(typer);
+        splashName.classList.remove("typing");
+        splashName.classList.add("activated");
+        setTimeout(finishSplash, 1100);
+      }
+    }, typingStepMs);
+  }, typingStartDelayMs);
 }
 
 function renderGauge(level) {
