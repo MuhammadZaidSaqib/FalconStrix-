@@ -3,12 +3,21 @@ import sys
 import time
 import json
 import logging
+from pathlib import Path
 from event_service import log_event
 from alert_service import create_alert
 from fsm_service import get_current_state, tick_fsm
 from ipc_config import PIPE_PATH, setup_named_pipe
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+
+try:
+    from dotenv import load_dotenv
+
+    ROOT = Path(__file__).resolve().parent.parent
+    load_dotenv(ROOT / ".env")
+except Exception:
+    pass
 
 def process_message(msg):
     try:
@@ -23,6 +32,11 @@ def process_message(msg):
         # Log event
         event_id = log_event(event_type, desc, source, process_name=pname, pid=pid)
         print(f"[BACKEND] Recv Event: {event_type} - {desc}")
+
+        # Don't treat response/audit events as new detections.
+        # Otherwise, FSM may re-escalate based on its own response actions.
+        if event_type in ("RESPONSE_ACTION", "RESPONSE_CMD_SENT", "PROCESS_KILLED"):
+            return
 
         if event_id and severity > 1:
             # Create Alert 

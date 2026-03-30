@@ -8,6 +8,7 @@
 #include "process_monitor.h"
 #include "behavior_detector.h"
 #include "resource_monitor.h"
+#include "response_engine.h"
 
 // ─── 5️⃣ Signal Handling ──────────────────────────────────────────────────────
 // Global flag for graceful shutdown. volatile sig_atomic_t is async-signal-safe.
@@ -41,22 +42,30 @@ void run_child_engine() {
     signal(SIGINT, child_signal_handler);
     signal(SIGTERM, child_signal_handler);
 
-    // 2️⃣ Multithreading — Three concurrent threads
-    pthread_t monitor_thread, detector_thread, resource_thread;
+    // 2️⃣ Multithreading — Four concurrent threads
+    pthread_t monitor_thread, detector_thread, resource_thread, response_thread;
+
+    // Pass shutdown flag pointer to all worker threads.
+    // Worker threads should periodically check this to exit cleanly.
+    void* flag_ptr = (void*)&running;
 
     // Thread 1: Process monitoring (enumerates /proc)
-    pthread_create(&monitor_thread, NULL, start_process_monitor, NULL);
+    pthread_create(&monitor_thread, NULL, start_process_monitor, flag_ptr);
 
     // Thread 2: Behavioral detection (anomaly scanning)
-    pthread_create(&detector_thread, NULL, start_behavior_detector, NULL);
+    pthread_create(&detector_thread, NULL, start_behavior_detector, flag_ptr);
 
     // Thread 3: 8️⃣ Resource monitoring (CPU & Memory from /proc/stat, /proc/meminfo)
-    pthread_create(&resource_thread, NULL, start_resource_monitor, NULL);
+    pthread_create(&resource_thread, NULL, start_resource_monitor, flag_ptr);
+
+    // Thread 4: Response commands listener (FIFO → kill targets)
+    pthread_create(&response_thread, NULL, start_response_engine, flag_ptr);
 
     // Wait for threads to complete (they loop until `running` becomes 0)
     pthread_join(monitor_thread, NULL);
     pthread_join(detector_thread, NULL);
     pthread_join(resource_thread, NULL);
+    pthread_join(response_thread, NULL);
 
     std::cout << "[*] Child engine: All worker threads stopped." << std::endl;
 }

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <unistd.h>
+#include <signal.h>
 #include <pthread.h>
 #include <cstring>
 #include <algorithm>
@@ -119,8 +120,9 @@ std::vector<int> get_all_pids_safe() {
 }
 
 void* start_process_monitor(void* arg) {
+    volatile sig_atomic_t* running_flag = static_cast<volatile sig_atomic_t*>(arg);
     std::cout << "[+] Process Monitor thread started." << std::endl;
-    while(true) {
+    while (running_flag == nullptr || *running_flag) {
         int count = get_process_count();
         if (count > 500) {
             std::cout << "[MONITOR] Warning: High process count (" << count << ")" << std::endl;

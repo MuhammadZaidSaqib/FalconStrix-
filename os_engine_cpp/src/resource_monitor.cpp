@@ -5,6 +5,7 @@
 #include <sstream>
 #include <unistd.h>
 #include <cstring>
+#include <signal.h>
 
 // ─── CPU Usage from /proc/stat ───────────────────────────────────────────────
 // Reads aggregate CPU times, computes delta between two samples to get %.
@@ -143,13 +144,14 @@ ProcessResourceInfo get_process_resource_info(int pid) {
 // Runs continuously, logging CPU/Memory at intervals.
 // Sends alert to backend if thresholds are exceeded.
 void* start_resource_monitor(void* arg) {
+    volatile sig_atomic_t* running_flag = static_cast<volatile sig_atomic_t*>(arg);
     std::cout << "[+] Resource Monitor thread started." << std::endl;
 
     // First sample to seed delta calculation
     get_cpu_usage();
     sleep(1);
 
-    while (true) {
+    while (running_flag == nullptr || *running_flag) {
         CpuUsage cpu = get_cpu_usage();
         MemoryInfo mem = get_memory_info();
 

@@ -1,11 +1,11 @@
 """
-Single source of truth for FalconStrix HIDRS event pipe paths.
+Single source of truth for FalconStrix HIDRS IPC paths.
 
-- Windows: backend/hidrs_events.pipe (regular file; mkfifo is unavailable)
-- Linux/macOS: /tmp/hidrs_events (FIFO created with os.mkfifo)
+We use two channels:
+- Events FIFO (OS engine → Python backend): PATH = /tmp/hidrs_events
+- Command FIFO (Python backend → OS engine): PATH = /tmp/hidrs_cmd
 
-The C++ engine (behavior_detector.cpp) opens /tmp/hidrs_events on POSIX —
-keep that path identical to PIPE_PATH here on non-Windows builds.
+Windows uses regular files as placeholders (mkfifo is not available in this Python stack).
 """
 from __future__ import annotations
 
@@ -23,8 +23,14 @@ def get_pipe_path() -> str:
         return os.path.join(BACKEND_DIR, "hidrs_events.pipe")
     return "/tmp/hidrs_events"
 
+def get_cmd_pipe_path() -> str:
+    if os.name == "nt":
+        return os.path.join(BACKEND_DIR, "hidrs_cmd.pipe")
+    return "/tmp/hidrs_cmd"
+
 
 PIPE_PATH = get_pipe_path()
+CMD_PIPE_PATH = get_cmd_pipe_path()
 
 
 def setup_named_pipe() -> None:
@@ -33,7 +39,11 @@ def setup_named_pipe() -> None:
         if not os.path.exists(PIPE_PATH):
             with open(PIPE_PATH, "w", encoding="utf-8") as f:
                 f.write("")
+        if not os.path.exists(CMD_PIPE_PATH):
+            with open(CMD_PIPE_PATH, "w", encoding="utf-8") as f:
+                f.write("")
         logging.info("FalconStrix IPC: using %s (Windows file mode)", PIPE_PATH)
+        logging.info("FalconStrix IPC: using %s (Windows file mode)", CMD_PIPE_PATH)
         return
 
     if not os.path.exists(PIPE_PATH):
@@ -43,6 +53,14 @@ def setup_named_pipe() -> None:
             logging.error("FalconStrix failed to create named pipe at %s: %s", PIPE_PATH, e)
             sys.exit(1)
     logging.info("FalconStrix IPC: FIFO ready at %s", PIPE_PATH)
+
+    if not os.path.exists(CMD_PIPE_PATH):
+        try:
+            os.mkfifo(CMD_PIPE_PATH, 0o666)
+        except OSError as e:
+            logging.error("FalconStrix failed to create named pipe at %s: %s", CMD_PIPE_PATH, e)
+            sys.exit(1)
+    logging.info("FalconStrix IPC: CMD FIFO ready at %s", CMD_PIPE_PATH)
 
 
 def pipe_status() -> dict:
@@ -62,6 +80,28 @@ def pipe_status() -> dict:
             out["is_fifo"] = bool(stat_mod.S_ISFIFO(st.st_mode))
             out["readable"] = os.access(PIPE_PATH, os.R_OK)
             out["writable"] = os.access(PIPE_PATH, os.W_OK)
+    except OSError:
+        pass
+    return out
+
+
+def cmd_pipe_status() -> dict:
+    """Metadata for health checks and the dashboard API."""
+    out: dict = {
+        "path": CMD_PIPE_PATH,
+        "exists": False,
+        "is_fifo": False,
+        "readable": False,
+        "writable": False,
+        "platform": os.name,
+    }
+    try:
+        if os.path.exists(CMD_PIPE_PATH):
+            out["exists"] = True
+            st = os.stat(CMD_PIPE_PATH)
+            out["is_fifo"] = bool(stat_mod.S_ISFIFO(st.st_mode))
+            out["readable"] = os.access(CMD_PIPE_PATH, os.R_OK)
+            out["writable"] = os.access(CMD_PIPE_PATH, os.W_OK)
     except OSError:
         pass
     return out

@@ -1,15 +1,19 @@
 import os
 import sys
 import time
+import subprocess
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def _run(script: str) -> None:
     path = os.path.join(_SCRIPT_DIR, script)
-    code = os.system(f'"{sys.executable}" "{path}"')
-    if code != 0:
-        print(f"[!] {script} exited with code {code}")
+    try:
+        cp = subprocess.run([sys.executable, path], check=False)
+        if cp.returncode != 0:
+            print(f"[!] {script} exited with code {cp.returncode}")
+    except Exception as ex:
+        print(f"[!] Failed to run {script}: {ex}")
 
 def menu():
     print("="*40)

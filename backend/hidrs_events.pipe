@@ -1,0 +1,6 @@
+{"event_type": "AUTH_FAILED", "description": "Failed login attempt for user 'root' from 192.168.1.31", "source": "Auth_Log", "pid": 18200, "process_name": "ssh_login_sim", "severity": 2}
+{"event_type": "AUTH_FAILED", "description": "Failed login attempt for user 'root' from 192.168.1.50", "source": "Auth_Log", "pid": 18200, "process_name": "ssh_login_sim", "severity": 2}
+{"event_type": "AUTH_FAILED", "description": "Failed login attempt for user 'root' from 192.168.1.37", "source": "Auth_Log", "pid": 18200, "process_name": "ssh_login_sim", "severity": 2}
+{"event_type": "AUTH_FAILED", "description": "Failed login attempt for user 'root' from 192.168.1.44", "source": "Auth_Log", "pid": 18200, "process_name": "ssh_login_sim", "severity": 2}
+{"event_type": "AUTH_FAILED", "description": "Failed login attempt for user 'root' from 192.168.1.22", "source": "Auth_Log", "pid": 18200, "process_name": "ssh_login_sim", "severity": 2}
+{"event_type": "PROCESS_SPAM", "description": "Rapid creation of 10 subprocesses detected", "source": "Process_Subsystem", "pid": 12212, "process_name": "flood_malware.py", "severity": 3}

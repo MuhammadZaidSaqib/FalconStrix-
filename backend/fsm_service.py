@@ -47,6 +47,7 @@ def tick_fsm():
     SELECT COUNT(*) as cnt FROM Alerts a
     JOIN Severity s ON a.severity_id = s.severity_id
     WHERE a.is_resolved = FALSE AND s.level_name IN ('HIGH', 'CRITICAL')
+      AND a.timestamp >= NOW() - INTERVAL 10 MINUTE
     """
     res = fetch_query(q, fetchall=False)
     high_alerts = res['cnt'] if res else 0
@@ -56,6 +57,7 @@ def tick_fsm():
     SELECT COUNT(*) as cnt FROM Alerts a
     JOIN Severity s ON a.severity_id = s.severity_id
     WHERE a.is_resolved = FALSE AND s.level_name = 'MEDIUM'
+      AND a.timestamp >= NOW() - INTERVAL 10 MINUTE
     """
     res2 = fetch_query(q2, fetchall=False)
     med_alerts = res2['cnt'] if res2 else 0
@@ -67,8 +69,7 @@ def tick_fsm():
     elif high_alerts == 1 or med_alerts >= 3:
         update_fsm_state('WARNING', 'Multiple suspicious events detected')
     elif high_alerts == 0 and med_alerts < 3 and current_state != 'NORMAL':
-        # De-escalation can be manual or automatic over time. Let's make it automatic if 0 alerts
-        pass
+        update_fsm_state('NORMAL', 'De-escalation: no sustained high/medium alerts in window', trigger_active_defense=False)
 
 def hardware_led_indicator(state):
     """ Simulates physical FSM hardware LEDs via print statements """
