@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>if ('scrollRestoration' in history) history.scrollRestoration = 'manual';</script>
+    <title>Sign in - FalconStrix</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body class="theme-normal login-body">
+    <div class="login-shell">
+        <div class="login-grid">
+            <section class="login-intel-panel" aria-label="Threat intelligence overview">
+                <div class="login-kicker">Secure Access Layer</div>
+                <h1 class="login-hero-title">FalconStrix<br>Cyber Defense Gateway</h1>
+                <p class="login-hero-copy">Enter through a live defense perimeter built like an operator console, with threat telemetry, lockout awareness, and a strong cyber-security visual identity.</p>
+
+                <div class="login-scanframe" aria-hidden="true">
+                    <div class="scanframe-grid"></div>
+                    <div class="scanframe-ring scanframe-ring-a"></div>
+                    <div class="scanframe-ring scanframe-ring-b"></div>
+                    <div class="scanframe-core">
+                        <span class="scanframe-core-label">Threat Mesh</span>
+                        <strong>ARMED</strong>
+                    </div>
+                    <div class="scanframe-sweep"></div>
+                    <div class="scanframe-node scanframe-node-a"></div>
+                    <div class="scanframe-node scanframe-node-b"></div>
+                    <div class="scanframe-node scanframe-node-c"></div>
+                </div>
+
+                <div class="login-metrics">
+                    <div class="login-metric-card">
+                        <span class="metric-label">Telemetry</span>
+                        <strong>247 feeds</strong>
+                        <span class="metric-sub">Cross-correlated</span>
+                    </div>
+                    <div class="login-metric-card">
+                        <span class="metric-label">Containment</span>
+                        <strong>12.4s</strong>
+                        <span class="metric-sub">Mean response</span>
+                    </div>
+                </div>
+
+                <div class="login-status-strip">
+                    <div class="status-chip status-chip-live">Live sensor mesh</div>
+                    <div class="status-chip">Zero-trust relay</div>
+                    <div class="status-chip">Behavioral lockout</div>
+                </div>
+            </section>
+
+            <section class="login-card">
+                <div class="login-brand">
+                    <div class="login-badge">Operator Access</div>
+                    <span class="brand-text">FalconStrix</span>
+                    <p class="login-tagline">SOC Command Center</p>
+                </div>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="login-flash login-flash--{{ category }}" role="alert">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                <form class="login-form" method="post" action="{{ url_for('login') }}" autocomplete="on">
+                    <label class="login-label" for="username">Username</label>
+                    <input class="login-input" type="text" id="username" name="username" required autocomplete="username" autofocus placeholder="operator.id">
+
+                    <label class="login-label" for="password">Password</label>
+                    <input class="login-input" type="password" id="password" name="password" required autocomplete="current-password" placeholder="enter secure phrase">
+
+                    <button type="submit" class="login-submit">Authenticate</button>
+                </form>
+                <p class="login-alt">No account? <a href="/signup">Create one</a></p>
+            </section>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,58 +1,39 @@
-#!/usr/bin/env python3
-"""
-Simulate repeated failed login attempts by appending to a watched auth log file
-and emitting high-volume LOGIN_ANOMALY events on the HIDRS events FIFO.
-Blue team (C++) tails line-rate; backend always ingests explicit events.
-"""
-from __future__ import annotations
-
 import json
-import os
 import time
-from pathlib import Path
+import random
+import os
+import sys
 
-from env_paths import auth_sim_log, events_fifo
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(BASE_DIR, 'backend'))
+from ipc_config import PIPE_PATH  # noqa: E402
 
-AUTH_SIM_PATH = auth_sim_log()
-EVENTS_FIFO = events_fifo()
+def send_to_blue_team(event_data):
+    try:
+        if not os.path.exists(PIPE_PATH):
+            print("Pipe doesn't exist, is the backend running?")
+            return
+        with open(PIPE_PATH, 'a') as f:
+            f.write(json.dumps(event_data) + "\n")
+    except Exception as e:
+        print(f"Failed to send event: {e}")
 
-
-def _append_auth_failures(count: int, delay_sec: float) -> None:
-    Path(AUTH_SIM_PATH).parent.mkdir(parents=True, exist_ok=True)
-    with open(AUTH_SIM_PATH, "a", encoding="utf-8") as log:
-        for i in range(count):
-            log.write(f"FAIL ssh invalid user redteam_{i} from 203.0.113.10\n")
-            log.flush()
-            if delay_sec > 0:
-                time.sleep(delay_sec)
-
-
-def _emit_fifo(obj: dict) -> None:
-    line = json.dumps(obj, separators=(",", ":")) + "\n"
-    with open(EVENTS_FIFO, "a", encoding="utf-8") as w:
-        w.write(line)
-        w.flush()
-
-
-def simulate_failed_logins(count: int = 30, delay_sec: float = 0.02) -> None:
-    _append_auth_failures(count, delay_sec)
-    _emit_fifo(
-        {
-            "type": "RED_TEAM_LOGIN",
-            "source": "red_team",
-            "severity": "HIGH",
-            "detail": f"Simulated {count} failed logins (auth sim log + FIFO)",
-            "auth_log": AUTH_SIM_PATH,
-            "force_alert": True,
+def run_simulation(attempts=5, delay=1):
+    print(f"[RED TEAM] Starting login brute-force simulator ({attempts} attempts)...")
+    for i in range(attempts):
+        time.sleep(delay)
+        event = {
+            "event_type": "AUTH_FAILED",
+            "description": f"Failed login attempt for user 'root' from 192.168.1.{random.randint(10, 50)}",
+            "source": "Auth_Log",
+            "pid": os.getpid(),
+            "process_name": "ssh_login_sim",
+            "severity": 2 # Medium severity
         }
-    )
-
+        send_to_blue_team(event)
+        print(f"-> Sent Login Failure {i+1}/{attempts}")
+    
+    print("[RED TEAM] Login Simulator complete.")
 
 if __name__ == "__main__":
-    import argparse
-
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--count", type=int, default=25)
-    ap.add_argument("--delay", type=float, default=0.02)
-    a = ap.parse_args()
-    simulate_failed_logins(a.count, a.delay)
+    run_simulation()

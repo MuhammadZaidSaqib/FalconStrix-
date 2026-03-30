@@ -1,28 +1,9 @@
-#pragma once
+#ifndef BEHAVIOR_DETECTOR_H
+#define BEHAVIOR_DETECTOR_H
 
-#include <atomic>
 #include <string>
 
-class EventWriter;
+void* start_behavior_detector(void* arg);
+void send_event_to_backend(const std::string& event_type, const std::string& description, int pid, const std::string& process_name, int severity);
 
-/**
- * Behavioral heuristics: process spikes, simulated auth log churn, canary file tamper.
- */
-class BehaviorDetector {
-public:
-    explicit BehaviorDetector(EventWriter* writer);
-
-    void runLoop(std::atomic<bool>* stop_flag);
-
-private:
-    void checkSpike();
-    void checkAuthLog();
-    void checkWatchFile();
-    void checkResourcePressure();
-
-    EventWriter* writer_;
-    int last_proc_count_;
-    long last_auth_size_;
-    long last_watch_mtime_;
-    float last_load1_;
-};
+#endif

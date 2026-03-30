@@ -1,94 +1,46 @@
-#!/usr/bin/env python3
-"""
-Orchestrate red-team simulations (login noise, process flood, file tamper).
-Uses HIDRS_EVENTS_FIFO so the blue pipeline records the same JSON schema as the OS engine.
-"""
-from __future__ import annotations
-
-import argparse
-import json
 import os
-import subprocess
 import sys
 import time
-from pathlib import Path
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parent.parent
+def _run(script: str) -> None:
+    path = os.path.join(_SCRIPT_DIR, script)
+    code = os.system(f'"{sys.executable}" "{path}"')
+    if code != 0:
+        print(f"[!] {script} exited with code {code}")
 
+def menu():
+    print("="*40)
+    print("  RED TEAM ATTACK CONTROLLER  ")
+    print("="*40)
+    print("1. Simulate Failed Logins (Brute Force)")
+    print("2. Simulate Process Flooding")
+    print("3. Simulate File Tampering")
+    print("4. Launch Full Attack Suite")
+    print("5. Exit")
+    print("="*40)
 
-def _emit_fifo(obj: dict) -> None:
-    from env_paths import events_fifo
-
-    fifo = events_fifo()
-    line = json.dumps(obj, separators=(",", ":")) + "\n"
-    with open(fifo, "a", encoding="utf-8") as w:
-        w.write(line)
-        w.flush()
-
-
-def run_login_burst(count: int, delay: float) -> None:
-    from login_simulator import simulate_failed_logins
-
-    simulate_failed_logins(count=count, delay_sec=delay)
-
-
-def run_flood(count: int) -> None:
-    script = Path(__file__).resolve().parent / "process_flood.py"
-    subprocess.run([sys.executable, str(script), str(count)], check=False)
-
-
-def run_file_tamper() -> None:
-    script = Path(__file__).resolve().parent / "file_tamper_simulator.py"
-    subprocess.run([sys.executable, str(script)], check=False)
-
-
-def run_full_sequence() -> None:
-    print("[red_team] login burst", flush=True)
-    run_login_burst(12, 0.05)
-    time.sleep(0.5)
-    print("[red_team] process flood", flush=True)
-    run_flood(80)
-    time.sleep(0.5)
-    print("[red_team] file tamper", flush=True)
-    run_file_tamper()
-
-
-def main() -> None:
-    p = argparse.ArgumentParser(description="HIDRS red team controller")
-    p.add_argument(
-        "mode",
-        choices=["login", "flood", "file", "fifo_only", "full"],
-        help="Attack mode",
-    )
-    p.add_argument("--count", type=int, default=20)
-    p.add_argument("--delay", type=float, default=0.05)
-    args = p.parse_args()
-
-    os.chdir(_repo_root())
-
-    if args.mode == "login":
-        run_login_burst(args.count, args.delay)
-    elif args.mode == "flood":
-        run_flood(args.count)
-    elif args.mode == "file":
-        run_file_tamper()
-    elif args.mode == "fifo_only":
-        from env_paths import events_fifo
-
-        _emit_fifo(
-            {
-                "type": "RED_TEAM_GENERIC",
-                "source": "red_team",
-                "severity": "MEDIUM",
-                "detail": "Manual fifo probe from attack_controller",
-            }
-        )
-        print(f"[red_team] wrote one event to {events_fifo()}", flush=True)
-    elif args.mode == "full":
-        run_full_sequence()
-
+def main():
+    while True:
+        menu()
+        choice = input("Select an attack vector: ")
+        
+        if choice == '1':
+            _run('login_simulator.py')
+        elif choice == '2':
+            _run('process_flood.py')
+        elif choice == '3':
+            _run('file_tamper_simulator.py')
+        elif choice == '4':
+            _run('login_simulator.py')
+            _run('process_flood.py')
+            _run('file_tamper_simulator.py')
+        elif choice == '5':
+            sys.exit(0)
+        else:
+            print("Invalid choice.")
 
 if __name__ == "__main__":
     main()

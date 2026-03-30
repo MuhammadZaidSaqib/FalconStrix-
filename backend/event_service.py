@@ -1,80 +1,45 @@
-"""
-Persist raw events from the OS engine FIFO, red team injectors, and responses.
-"""
-from __future__ import annotations
+from db_connection import execute_query, fetch_query
+import logging
 
-import json
-from typing import Any, Dict, Optional
+def log_event(event_type, description, source, process_name=None, pid=None, user_id=None):
+    """ Logs an event into the Events table, creating a Process entry if necessary. """
+    try:
+        process_id = None
+        if process_name and pid:
+            # Check or create process
+            check_proc = "SELECT process_id FROM Processes WHERE pid = %s AND process_name = %s ORDER BY start_time DESC LIMIT 1"
+            res = fetch_query(check_proc, (pid, process_name), fetchall=False)
+            if res:
+                process_id = res['process_id']
+            else:
+                insert_proc = "INSERT INTO Processes (pid, process_name) VALUES (%s, %s)"
+                process_id = execute_query(insert_proc, (pid, process_name))
 
-from db_connection import get_connection
-
-
-def _system_user_id(conn) -> int:
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT user_id FROM Users WHERE username=%s AND host=%s LIMIT 1",
-        ("system", "localhost"),
-    )
-    row = cur.fetchone()
-    cur.close()
-    if row:
-        return int(row[0])
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO Users (username, host, role) VALUES (%s,%s,%s)",
-        ("system", "localhost", "system"),
-    )
-    uid = cur.lastrowid
-    conn.commit()
-    cur.close()
-    return int(uid)
-
-
-def insert_event(
-    event_type: str,
-    source: str,
-    description: str,
-    payload: Optional[Dict[str, Any]] = None,
-    user_id: Optional[int] = None,
-) -> int:
-    payload_json = json.dumps(payload) if payload is not None else None
-    with get_connection() as conn:
-        uid = user_id if user_id is not None else _system_user_id(conn)
-        cur = conn.cursor()
-        if payload_json is None:
-            cur.execute(
-                """
-                INSERT INTO Events (user_id, event_type, source, description, payload)
-                VALUES (%s,%s,%s,%s,NULL)
-                """,
-                (uid, event_type, source, description),
+        if user_id is not None:
+            insert_event = """
+            INSERT INTO Events (event_type, description, source, process_id, user_id)
+            VALUES (%s, %s, %s, %s, %s)
+            """
+            event_id = execute_query(
+                insert_event, (event_type, description, source, process_id, user_id)
             )
         else:
-            cur.execute(
-                """
-                INSERT INTO Events (user_id, event_type, source, description, payload)
-                VALUES (%s,%s,%s,%s,CAST(%s AS JSON))
-                """,
-                (uid, event_type, source, description, payload_json),
-            )
-        eid = cur.lastrowid
-        conn.commit()
-        cur.close()
-        return int(eid)
-
-
-def list_recent_events(limit: int = 50):
-    with get_connection() as conn:
-        cur = conn.cursor(dictionary=True)
-        cur.execute(
+            insert_event = """
+            INSERT INTO Events (event_type, description, source, process_id)
+            VALUES (%s, %s, %s, %s)
             """
-            SELECT event_id, user_id, event_type, source, description, payload, created_at
-            FROM Events
-            ORDER BY created_at DESC
-            LIMIT %s
-            """,
-            (limit,),
-        )
-        rows = cur.fetchall()
-        cur.close()
-        return rows
+            event_id = execute_query(insert_event, (event_type, description, source, process_id))
+        return event_id
+    except Exception as e:
+        logging.error(f"Failed to log event {event_type}: {e}")
+        return None
+
+def get_recent_events(limit=50):
+    query = """
+    SELECT e.event_id, e.event_type, e.description, p.process_name, e.timestamp
+    FROM Events e
+    LEFT JOIN Processes p ON e.process_id = p.process_id
+    ORDER BY e.timestamp DESC
+    LIMIT %s
+    """
+    return fetch_query(query, (limit,))

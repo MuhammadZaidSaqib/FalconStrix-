@@ -1,214 +1,1318 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HIDRS SOC Command Center</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=12" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>if ('scrollRestoration' in history) history.scrollRestoration = 'manual';</script>
+    <title>FalconStrix — SOC Dashboard</title>
+    <meta name="description" content="Hybrid Behavioral Cybersecurity SOC Command Center with OS-Level Integration">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
 </head>
-<body class="theme-dark" id="body-root">
-  <div id="dashboard-content" class="dashboard-content visible">
-    <div id="layout-shell" class="layout-shell">
-      <aside class="sidebar" aria-label="Primary navigation">
-        <div class="sidebar-title">Command Menu</div>
-        <nav class="sidebar-nav">
-          <button class="nav-item active" data-target="overview-section" type="button">Overview</button>
-          <button class="nav-item" data-target="concept-procfs-section" type="button">/proc Metadata</button>
-          <button class="nav-item" data-target="concept-resource-section" type="button">Resource Monitor</button>
-          <button class="nav-item" data-target="concept-supervision-section" type="button">Fault Supervision</button>
-          <button class="nav-item" data-target="alerts-section" type="button">Live Alerts</button>
-          <button class="nav-item" data-target="processes-section" type="button">Processes</button>
-          <button class="nav-item" data-target="responses-section" type="button">Responses</button>
-          <button class="nav-item" data-target="events-section" type="button">Events</button>
-          <button class="nav-item" data-target="settings-section" type="button">Settings</button>
-        </nav>
-      </aside>
-
-      <div class="content-shell">
-        <header class="topbar">
-          <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle sidebar">
-            Menu
-          </button>
-          <div class="brand">
-            <img
-              class="brand-logo"
-              src="{{ url_for('static', filename='soc-pic.svg') }}"
-              alt="SOC logo"
-            />
-            <div>
-              <h1>HIDRS SOC</h1>
-              <p class="sub">Hybrid Behavioral Monitoring &amp; Response</p>
-            </div>
-          </div>
-          <div class="state-cluster">
-            <div id="led-strip" class="led-strip" data-led="GREEN">
-              <span class="led led-green" title="NORMAL / Green LED"></span>
-              <span class="led led-yellow" title="WARNING / Yellow LED"></span>
-              <span class="led led-red" title="LOCKED / Red LED"></span>
-            </div>
-            <div class="fsm-panel">
-              <div class="fsm-label">FSM State</div>
-              <div id="fsm-state" class="fsm-state">NORMAL</div>
-              <div id="fsm-reason" class="fsm-reason"></div>
-            </div>
-            <div class="gauge-wrap">
-              <div class="gauge-label">Threat level</div>
-              <canvas id="threatGauge" width="132" height="132"></canvas>
-            </div>
-          </div>
-        </header>
-
-        <div id="db-banner" class="db-banner hidden"></div>
-
-        <div id="locked-banner" class="locked-banner hidden">
-          <strong>DEFENSIVE MODE</strong> — FSM LOCKED. Automated response engaged. Dashboard in critical styling.
+<body class="theme-normal">
+    <div id="startup-screen" class="startup-screen">
+        <div class="startup-content">
+            <p class="startup-kicker">Initializing Security Platform</p>
+            <h1 class="startup-title" aria-label="FalconStrix">
+                <span>F</span><span>a</span><span>l</span><span>c</span><span>o</span><span>n</span><span>S</span><span>t</span><span>r</span><span>i</span><span>x</span>
+            </h1>
+            <div class="startup-line"></div>
         </div>
-
-        <main class="grid">
-          <section id="overview-section" class="panel wide">
-            <h2>SOC Overview</h2>
-            <div class="overview-soc-grid">
-              <article class="overview-box">
-                <h3>Overview</h3>
-                <div class="overview-stat-list">
-                  <div class="overview-stat-row">
-                    <span>Active Threats</span>
-                    <strong id="ov-active-threats">0</strong>
-                  </div>
-                  <div class="overview-stat-row">
-                    <span>Resolved Cases</span>
-                    <strong id="ov-resolved-cases">0</strong>
-                  </div>
-                  <div class="overview-stat-row">
-                    <span>Vulnerabilities</span>
-                    <strong id="ov-vulnerabilities">0</strong>
-                  </div>
-                  <div class="overview-stat-row">
-                    <span>System Status</span>
-                    <strong id="ov-system-status">SECURE</strong>
-                  </div>
-                </div>
-              </article>
-
-              <article class="overview-box overview-box-wide">
-                <h3>Threat Activity</h3>
-                <canvas id="alertsChart" height="120"></canvas>
-              </article>
-
-              <article id="ov-card-threat" class="overview-box">
-                <h3>Vulnerability Report</h3>
-                <div class="risk-ring-wrap">
-                  <div id="ov-risk-ring" class="risk-ring">0%</div>
-                  <div id="ov-threat-status" class="overview-meta">Low risk</div>
-                </div>
-                <div class="overview-meta" id="ov-threat-level">0%</div>
-              </article>
-
-              <article class="overview-box">
-                <h3>Recent Alerts</h3>
-                <div id="ov-recent-alerts" class="feed feed-compact"></div>
-              </article>
-
-              <article class="overview-box overview-box-wide">
-                <h3>Network Traffic</h3>
-                <div class="network-hero">
-                  <div class="network-map-overlay"></div>
-                  <div class="network-grid">
-                    <article class="network-card">
-                      <div class="overview-label">Status</div>
-                      <div id="net-status" class="overview-value">Unavailable</div>
-                    </article>
-                    <article class="network-card">
-                      <div class="overview-label">Data In</div>
-                      <div id="net-in-rate" class="overview-value">0.000 Mbps</div>
-                      <div id="net-in-total" class="overview-meta">Total: 0 B</div>
-                    </article>
-                    <article class="network-card">
-                      <div class="overview-label">Data Out</div>
-                      <div id="net-out-rate" class="overview-value">0.000 Mbps</div>
-                      <div id="net-out-total" class="overview-meta">Total: 0 B</div>
-                    </article>
-                  </div>
-                  <canvas id="networkTrafficChart" height="120"></canvas>
-                </div>
-              </article>
-
-              <article id="ov-card-fsm" class="overview-box">
-                <h3>FSM State</h3>
-                <div id="ov-fsm-state" class="overview-value">NORMAL</div>
-                <div id="ov-fsm-reason" class="overview-meta">System monitoring in standard mode.</div>
-              </article>
-
-              <article id="ov-card-process" class="overview-box">
-                <h3>Process Summary</h3>
-                <div id="ov-process-count" class="overview-value">0 active flags</div>
-                <div id="ov-process-summary" class="overview-meta">No suspicious process activity.</div>
-              </article>
-
-              <article id="ov-card-event" class="overview-box">
-                <h3>Event Summary</h3>
-                <div id="ov-event-count" class="overview-value">0 events</div>
-                <div id="ov-event-summary" class="overview-meta">No recent security events captured.</div>
-              </article>
-            </div>
-
-            <div id="ov-functional-card" class="overview-functional tone-good">
-              <div class="overview-label">Functionality Summary</div>
-              <div id="ov-functional-summary" class="overview-meta">
-                Dashboard services are healthy. Live alerts, process telemetry, response logging, and event feeds are active.
-              </div>
-            </div>
-            <div id="ov-concepts-card" class="overview-functional tone-info">
-              <div class="overview-label">OS Concepts Summary</div>
-              <div id="ov-concepts-summary" class="overview-meta">
-                Process metadata, resource pressure telemetry, and supervision health will appear here.
-              </div>
-            </div>
-          </section>
-          <section id="concept-procfs-section" class="panel wide">
-            <h2>/proc Metadata Concept</h2>
-            <div id="concept-procfs-summary" class="settings-placeholder"></div>
-          </section>
-          <section id="concept-resource-section" class="panel wide">
-            <h2>Resource Monitoring Concept</h2>
-            <div id="concept-resource-summary" class="settings-placeholder"></div>
-          </section>
-          <section id="concept-supervision-section" class="panel wide">
-            <h2>Fault Tolerance &amp; Supervision Concept</h2>
-            <div id="concept-supervision-summary" class="settings-placeholder"></div>
-          </section>
-          <section id="alerts-section" class="panel">
-            <h2>Live alerts</h2>
-            <div id="alert-feed" class="feed"></div>
-          </section>
-          <section id="processes-section" class="panel">
-            <h2>Suspicious processes</h2>
-            <div id="proc-feed" class="feed"></div>
-          </section>
-          <section id="responses-section" class="panel">
-            <h2>Response log</h2>
-            <div id="resp-feed" class="feed"></div>
-          </section>
-          <section id="events-section" class="panel wide">
-            <h2>Recent events</h2>
-            <div id="event-feed" class="feed feed-compact"></div>
-          </section>
-          <section id="settings-section" class="panel wide">
-            <h2>Settings</h2>
-            <div class="settings-placeholder">
-              Configure data retention, notification channels, and dashboard refresh preferences.
-            </div>
-          </section>
-        </main>
-      </div>
     </div>
-  </div>
 
-  <script>
-    window.__INITIAL__ = {{ initial | tojson }};
-  </script>
-  <script src="{{ url_for('static', filename='script.js') }}?v=12"></script>
+    <div class="app-layout dashboard-shell">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand"><span class="brand-text">FalconStrix</span></div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">Monitoring</div>
+                <button class="nav-item active" data-page="dashboard" id="nav-dashboard"><span class="nav-text">Dashboard</span></button>
+                <button class="nav-item" data-page="alerts" id="nav-alerts"><span class="nav-text">Live Alerts</span><span class="nav-badge" id="sidebar-alert-count">0</span></button>
+                <button class="nav-item" data-page="events" id="nav-events"><span class="nav-text">Events Log</span></button>
+                <button class="nav-item" data-page="process-monitor" id="nav-process-monitor"><span class="nav-text">Process Monitor</span><span class="nav-badge" style="background:#00c3ff">LIVE</span></button>
+                <button class="nav-item" data-page="fsm" id="nav-fsm"><span class="nav-text">FSM State</span></button>
+                <div class="nav-section-label">OS Concepts</div>
+                <button class="nav-item" data-page="os-concepts" id="nav-os-concepts"><span class="nav-text">All Concepts</span><span class="nav-badge concept-badge">10</span></button>
+                <button class="nav-item" data-page="os-process" id="nav-os-process"><span class="nav-text">Process Management</span></button>
+                <button class="nav-item" data-page="os-threads" id="nav-os-threads"><span class="nav-text">Multithreading</span></button>
+                <button class="nav-item" data-page="os-sync" id="nav-os-sync"><span class="nav-text">Synchronization</span></button>
+                <button class="nav-item" data-page="os-ipc" id="nav-os-ipc"><span class="nav-text">IPC Pipes</span></button>
+                <button class="nav-item" data-page="os-signals" id="nav-os-signals"><span class="nav-text">Signal Handling</span></button>
+                <button class="nav-item" data-page="os-resources" id="nav-os-resources"><span class="nav-text">Resource Monitor</span></button>
+                <div class="nav-section-label">Actions</div>
+                <button class="nav-item" data-page="red-team" id="nav-red-team"><span class="nav-text">Red Team Simulation</span></button>
+                <button class="nav-item" data-page="response" id="nav-response"><span class="nav-text">Response Engine</span></button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="sidebar-note">
+                    <strong>FalconStrix Core</strong>
+                    <span>Live navigation, alert review, and SOC workflow access.</span>
+                </div>
+                <div id="sidebar-connection" class="sidebar-status offline"><span class="status-dot"></span><span id="sidebar-conn-text">Offline</span></div>
+            </div>
+        </aside>
+        <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+        <div class="sidebar-hover-tab"></div>
+
+        <div class="main-content">
+            <header>
+                <div class="header-left">
+                    <button class="menu-btn" id="menu-toggle" title="Toggle Menu">&#9776;</button>
+                    <h1 class="page-title" id="page-title">FalconStrix</h1>
+                </div>
+                <div class="header-status">
+                    <span class="header-user-pill" title="Signed-in operator">{{ username or 'Operator' }}</span>
+                    <form method="post" action="{{ url_for('logout') }}" class="header-logout-form">
+                        <button type="submit" class="btn-logout">Sign out</button>
+                    </form>
+                    <button class="btn-primary" id="btn-generate-report" style="margin-right: 15px;">📥 Generate Report</button>
+                    <div id="connection-badge" class="connection-badge offline">BACKEND OFFLINE</div>
+                    <div id="status-badge" class="badge-normal">STATE: NORMAL</div>
+                </div>
+            </header>
+
+            <!-- ════════ PAGE: DASHBOARD ════════ -->
+            <main id="page-dashboard" class="page active">
+                <div class="modern-grid">
+                    <!-- Column 1 -->
+                    <div class="dash-col col-1">
+                        <div class="dash-widget widget-overview">
+                            <div class="widget-header">
+                                <h3>Overview</h3>
+                            </div>
+                            <div class="ov-list">
+                                <div class="ov-item" onclick="switchPage('alerts')" style="cursor: pointer;">
+                                    <div class="ov-left"><span class="ov-icon red">⭘</span> <span class="ov-name">Active Threats</span></div>
+                                    <div class="ov-right"><strong id="dash-active-threats" class="ov-val red-text">16</strong> <span class="ov-arrow">›</span></div>
+                                </div>
+                                <div class="ov-item" onclick="switchPage('events')" style="cursor: pointer;">
+                                    <div class="ov-left"><span class="ov-icon green">✔</span> <span class="ov-name">Resolved Cases</span></div>
+                                    <div class="ov-right"><strong id="dash-resolved" class="ov-val green-text">128</strong> <span class="ov-arrow">›</span></div>
+                                </div>
+                                <div class="ov-item" onclick="switchPage('events')" style="cursor: pointer;">
+                                    <div class="ov-left"><span class="ov-icon purple">☠</span> <span class="ov-name">Processes Terminated</span></div>
+                                    <div class="ov-right"><strong id="dash-kills" class="ov-val purple-text">0</strong> <span class="ov-arrow">›</span></div>
+                                </div>
+                                <div class="ov-item" onclick="switchPage('os-concepts')" style="cursor: pointer;">
+                                    <div class="ov-left"><span class="ov-icon yellow">⚠</span> <span class="ov-name">Vulnerabilities</span></div>
+                                    <div class="ov-right"><strong id="dash-vuln" class="ov-val yellow-text">34</strong> <span class="ov-arrow">›</span></div>
+                                </div>
+                                <div class="ov-item" onclick="switchPage('fsm')" style="cursor: pointer;">
+                                    <div class="ov-left"><span class="ov-icon blue">🛡</span> <span class="ov-name">System Status</span></div>
+                                    <div class="ov-right"><span id="dash-status" class="ov-badge green-bg">SECURE</span> <span class="ov-arrow">›</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dash-widget widget-alerts">
+                            <div class="widget-header">
+                                <h3>Recent Alerts</h3>
+                            </div>
+                            <div class="alerts-vert-list" id="dash-recent-alerts"></div>
+                        </div>
+
+                        <div class="resource-widget widget-cpu-overview">
+                            <div class="resource-header">
+                                <h3>CPU Overview</h3>
+                            </div>
+                            <div class="gauge-wrapper">
+                                <canvas id="cpuGauge"></canvas>
+                                <div class="gauge-info">
+                                    <div class="gauge-head">i</div>
+                                    <span class="val" id="cpu-gauge-val">42.5</span>
+                                    <span class="unit">%</span>
+                                    <span class="label">CPU</span>
+                                    <span class="sub">Utilization</span>
+                                </div>
+                            </div>
+                            <table class="res-table">
+                                <tr><td class="res-label">Utilization</td><td class="res-val"><span id="cpu-util">42</span><span class="res-unit">%</span></td></tr>
+                                <tr><td class="res-label">Frequency</td><td class="res-val"><span id="cpu-freq">3400</span><span class="res-unit">MHz</span></td></tr>
+                                <tr><td class="res-label">Processes</td><td class="res-val" id="cpu-proc-count">142</td></tr>
+                                <tr><td class="res-label">Up Time</td><td class="res-val" id="cpu-uptime">02:30:15</td></tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Column 2 & 3 (Center) -->
+                    <div class="dash-col col-23">
+                        <div class="dash-widget widget-threat">
+                            <div class="widget-header">
+                                <h3>Threat Activity</h3>
+                                <select class="dash-select"><option>Last 30 Days</option></select>
+                            </div>
+                            <div class="chart-wrapper threat-chart">
+                                <canvas id="threatActivityChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="dash-widget widget-network">
+                            <div class="widget-header">
+                                <h3>Network Traffic</h3>
+                            </div>
+                            <div class="network-map-area" id="network-map-area" style="--net-in-speed:1; --net-out-speed:1;">
+                                <div class="map-bg"></div>
+                                <div class="network-flow-viz" aria-hidden="true">
+                                    <div class="nfv-core">
+                                        <span class="nfv-ring"></span>
+                                        <span class="nfv-core-dot"></span>
+                                    </div>
+                                    <div class="nfv-beam nfv-beam-in"></div>
+                                    <div class="nfv-beam nfv-beam-out"></div>
+                                    <div class="nfv-packets nfv-packets-in">
+                                        <span></span><span></span><span></span><span></span>
+                                    </div>
+                                    <div class="nfv-packets nfv-packets-out">
+                                        <span></span><span></span><span></span><span></span>
+                                    </div>
+                                    <div class="nfv-labels">
+                                        <span class="nfv-lbl nfv-lbl-in">ingress</span>
+                                        <span class="nfv-lbl nfv-lbl-out">egress</span>
+                                    </div>
+                                </div>
+                                <div class="map-stats">
+                                    <div class="map-stat"><span class="ms-icon blue-text">🎧</span> <span>Data In</span> <strong class="green-text" id="net-in-rate">…</strong> <small style="display:block; font-size: 0.7rem; color: #888;">Total: <span id="net-total-in">—</span></small></div>
+                                    <div class="map-stat"><span class="ms-icon red-text">📦</span> <span>Data Out</span> <strong class="red-text" id="net-out-rate">…</strong> <small style="display:block; font-size: 0.7rem; color: #888;">Total: <span id="net-total-out">—</span></small></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="center-bottom-row">
+                            <div class="center-stack">
+                                <div class="dash-widget widget-incidents">
+                                    <div class="widget-header tabs-header">
+                                        <div class="tabs" role="tablist">
+                                            <button type="button" class="active" data-period="weekly" role="tab" aria-selected="true">Weekly</button>
+                                            <button type="button" data-period="monthly" role="tab" aria-selected="false">Monthly</button>
+                                            <button type="button" data-period="yearly" role="tab" aria-selected="false">Yearly</button>
+                                        </div>
+                                    </div>
+                                    <div class="chart-wrapper incidents-chart">
+                                        <canvas id="incidentsChart"></canvas>
+                                    </div>
+                                </div>
+
+                            </div>
+                            <div class="dash-widget widget-users">
+                                <div class="widget-header">
+                                    <h3>User Activity</h3>
+                                </div>
+                                <div class="user-list">
+                                    <div class="ul-item"><span class="ul-icon gray">👤</span> <span>Admin Login</span> <span class="ul-time">10:24 AM ›</span></div>
+                                    <div class="ul-item"><span class="ul-icon red">⚠</span> <span>Failed Login Attempt</span> <span class="ul-time">09:50 AM ›</span></div>
+                                    <div class="ul-item"><span class="ul-icon blue">📄</span> <span>File Access: Confidential</span> <span class="ul-time">09:30 AM ›</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dash-widget widget-processor-graph">
+                            <div class="widget-header">
+                                <h3>Processor Performance History</h3>
+                                <div class="ov-badge green-bg">REAL-TIME</div>
+                            </div>
+                            <div class="chart-wrapper cpu-history-chart" style="height: 180px;">
+                                <canvas id="cpuHistoryChart"></canvas>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Column 4 (Right) -->
+                    <div class="dash-col col-4">
+                        <div class="dash-widget widget-vuln">
+                            <div class="widget-header">
+                                <h3>Vulnerability Report</h3>
+                            </div>
+                            <div class="vuln-content" onclick="switchPage('os-concepts')" style="cursor: pointer;">
+                                <div class="donut-wrapper">
+                                    <canvas id="vulnChart"></canvas>
+                                    <div class="donut-center">
+                                        <strong>64%</strong>
+                                        <span>High Risk</span>
+                                    </div>
+                                </div>
+                                <div class="vuln-stats">
+                                    <div class="vs-item"><span class="vs-dot red-bg"></span> <strong>112</strong> Critical</div>
+                                    <div class="vs-item"><span class="vs-dot yellow-bg"></span> <strong>87</strong> High</div>
+                                    <div class="vs-item"><span class="vs-dot green-bg"></span> <strong>152</strong> Medium</div>
+                                </div>
+                            </div>
+                            <button class="btn-primary w-100 scan-btn">Scan Now</button>
+                        </div>
+
+                        <div class="dash-widget widget-devices">
+                            <div class="widget-header">
+                                <h3>Device Status</h3>
+                            </div>
+                            <div class="device-list">
+                                <div class="dl-item"><span class="dl-icon">🖥</span> <span>Firewall-Server</span> <span class="green-text">Online ›</span></div>
+                                <div class="dl-item"><span class="dl-icon">💻</span> <span>Workstation-23</span> <span class="red-text">At Risk ›</span></div>
+                                <div class="dl-item"><span class="dl-icon">🗄</span> <span>DB-Server 02</span> <span class="ov-badge green-bg">Secure ⌄</span></div>
+                            </div>
+                        </div>
+
+                        <div class="dash-widget widget-summary">
+                            <div class="widget-header">
+                                <h3>Incident Summary</h3>
+                            </div>
+                            <div class="summary-list"></div>
+                        </div>
+                                <div class="resource-widget widget-memory-overview">
+                                    <div class="resource-header">
+                                        <h3>Memory Overview</h3>
+                                    </div>
+                                    <div class="gauge-wrapper">
+                                        <canvas id="memoryGauge"></canvas>
+                                        <div class="gauge-info">
+                                            <div class="gauge-head">i</div>
+                                            <span class="val" id="mem-gauge-val">12.7</span>
+                                            <span class="unit">GB</span>
+                                            <span class="label">MEMORY</span>
+                                            <span class="sub">USAGE</span>
+                                        </div>
+                                    </div>
+                                    <table class="res-table">
+                                        <tr><td class="res-label">In Use (Compressed)</td><td class="res-val"><span id="mem-in-use">12.7</span><span class="res-unit">GB</span></td></tr>
+                                        <tr><td class="res-label">Available</td><td class="res-val"><span id="mem-avail">3.1</span><span class="res-unit">GB</span></td></tr>
+                                        <tr><td class="res-label">Committed</td><td class="res-val"><span id="mem-commit">15.8</span><span class="res-unit">GB</span></td></tr>
+                                        <tr><td class="res-label">Cached</td><td class="res-val"><span id="mem-cached">3.3</span><span class="res-unit">GB</span></td></tr>
+                                    </table>
+                                </div>
+                    </div>
+                </div>
+
+                <section class="panel os-concepts-strip" style="margin-top: 20px;">
+                    <div class="panel-heading">
+                        <h2>OS Concepts Active</h2>
+                        <span class="panel-caption" id="os-concepts-panel-caption">10 concepts integrated</span>
+                    </div>
+                    <p id="os-concepts-security-note" class="os-concepts-security-note hidden" role="status" aria-live="polite"></p>
+                    <div class="concepts-grid">
+                        <div class="concept-card" data-concept="1" data-page="os-process"><div class="concept-info"><strong>Process Creation</strong><span>fork(), wait(), parent-child</span></div><div class="concept-stat active-stat">Active</div></div>
+                        <div class="concept-card" data-concept="2" data-page="os-threads"><div class="concept-info"><strong>Multithreading</strong><span>3 POSIX threads running</span></div><div class="concept-stat active-stat">3 Threads</div></div>
+                        <div class="concept-card" data-concept="3" data-page="os-sync"><div class="concept-info"><strong>Synchronization</strong><span>Mutex protecting shared data</span></div><div class="concept-stat active-stat">Locked</div></div>
+                        <div class="concept-card" data-concept="4" data-page="os-ipc"><div class="concept-info"><strong>IPC Named Pipes</strong><span>FIFO between C++ and Python</span></div><div class="concept-stat active-stat" id="ipc-stat">0 msgs</div></div>
+                        <div class="concept-card" data-concept="5" data-page="os-signals"><div class="concept-info"><strong>Signal Handling</strong><span>SIGINT, SIGTERM handlers</span></div><div class="concept-stat active-stat">Registered</div></div>
+                        <div class="concept-card" data-concept="6" data-page="response"><div class="concept-info"><strong>Process Termination</strong><span>kill(pid, SIGKILL)</span></div><div class="concept-stat" id="kill-stat">0 killed</div></div>
+                        <div class="concept-card" data-concept="7" data-page="os-process"><div class="concept-info"><strong>/proc Filesystem</strong><span>comm, cmdline, status</span></div><div class="concept-stat active-stat">Reading</div></div>
+                        <div class="concept-card" data-concept="8" data-page="os-resources"><div class="concept-info"><strong>Resource Monitor</strong><span>CPU &amp; Memory tracking</span></div><div class="concept-stat" id="cpu-stat">0% CPU</div></div>
+                        <div class="concept-card" data-concept="9" data-page="os-threads"><div class="concept-info"><strong>Concurrency Design</strong><span>Multi-process + multi-thread</span></div><div class="concept-stat active-stat">Parallel</div></div>
+                        <div class="concept-card" data-concept="10" data-page="os-process"><div class="concept-info"><strong>Fault Tolerance</strong><span>Supervision restart loop</span></div><div class="concept-stat active-stat">Supervising</div></div>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ════════ PAGE: ALERTS ════════ -->
+            <main id="page-alerts" class="page">
+                <section class="panel feed-container">
+                    <div class="panel-heading"><h2>Security alerts</h2><span id="feed-count" class="panel-caption">0 tracked</span></div>
+                    <div class="table-responsive">
+                        <table class="alerts-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Agent</th>
+                                    <th>Agent name</th>
+                                    <th>Techniques(s)</th>
+                                    <th>Tactic(s)</th>
+                                    <th>Description</th>
+                                    <th>Level</th>
+                                    <th>Rule ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alert-list-table">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ════════ PAGE: EVENTS ════════ -->
+            <main id="page-events" class="page">
+                <section class="panel events-container">
+                    <div class="panel-heading"><h2>Recent Events</h2><span class="panel-caption">Latest backend activity</span></div>
+                    <ul id="event-list" class="event-list"></ul>
+                </section>
+            </main>
+
+            <!-- ════════ PAGE: PROCESS MONITOR ════════ -->
+            <main id="page-process-monitor" class="page">
+                <section class="panel">
+                    <div class="panel-heading">
+                        <h2>System Process Monitor</h2>
+                        <span class="panel-caption">Real-time task tracking with behavioral detection</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="process-table">
+                            <thead>
+                                <tr>
+                                    <th>PID</th>
+                                    <th>Name</th>
+                                    <th>User</th>
+                                    <th>CPU%</th>
+                                    <th>Memory%</th>
+                                    <th>Threat Level</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="process-list-table">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ════════ PAGE: FSM ════════ -->
+            <main id="page-fsm" class="page">
+                <section class="panel">
+                    <div class="panel-heading"><h2>FSM State Machine</h2><span id="fsm-current-state" class="analysis-state state-normal">NORMAL</span></div>
+                    <div class="fsm-diagram">
+                        <div class="fsm-node fsm-normal" id="fsm-node-normal"><div class="fsm-led green-led"></div><strong>NORMAL</strong><span>Green LED</span></div>
+                        <div class="fsm-arrow">&#8594;</div>
+                        <div class="fsm-node fsm-warning" id="fsm-node-warning"><div class="fsm-led yellow-led"></div><strong>WARNING</strong><span>Yellow LED</span></div>
+                        <div class="fsm-arrow">&#8594;</div>
+                        <div class="fsm-node fsm-locked" id="fsm-node-locked"><div class="fsm-led red-led"></div><strong>LOCKED</strong><span>Red LED</span></div>
+                    </div>
+                </section>
+                <section class="panel timeline-container">
+                    <div class="panel-heading"><h2>FSM Transition History</h2><span class="panel-caption">Recent state changes</span></div>
+                    <ul id="state-history-list" class="history-list"></ul>
+                </section>
+            </main>
+
+            <!-- ════════ PAGE: OS CONCEPTS OVERVIEW ════════ -->
+            <main id="page-os-concepts" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                    <div class="panel-heading"><h2>Operating System Concepts Used</h2><span class="panel-caption">10 concepts fully integrated</span></div>
+                    <div class="os-detail-grid">
+                        <div class="os-detail-card" data-page="os-process">
+                            <div class="os-detail-header"><h3>Process Creation &amp; Management</h3></div>
+                            <div class="os-detail-body"><p>Implemented using <code>fork()</code> in <code>main.cpp</code>. Parent supervises the system while child runs the monitoring engine. Uses <code>waitpid()</code> for zombie process handling.</p><div class="os-tags"><span class="os-tag">fork()</span><span class="os-tag">wait()</span><span class="os-tag">PCB</span><span class="os-tag">Parent-Child</span></div></div>
+                        </div>
+                        <div class="os-detail-card" data-page="os-threads">
+                            <div class="os-detail-header"><h3>Multithreading (Concurrency)</h3></div>
+                            <div class="os-detail-body"><p>Uses POSIX threads for parallel execution: process monitoring, behavioral detection, resource monitoring — all running concurrently.</p><div class="os-tags"><span class="os-tag">pthread_create</span><span class="os-tag">pthread_join</span><span class="os-tag">Parallel</span></div></div>
+                        </div>
+                        <div class="os-detail-card" data-page="os-sync">
+                            <div class="os-detail-header"><h3>Synchronization (Mutex)</h3></div>
+                            <div class="os-detail-body"><p>Shared data protected using <code>pthread_mutex_t</code>. Both monitor and detector threads acquire the lock before reading <code>/proc</code>.</p><div class="os-tags"><span class="os-tag">Mutex</span><span class="os-tag">Critical Section</span><span class="os-tag">Thread Safety</span></div></div>
+                        </div>
+                        <div class="os-detail-card" data-page="os-ipc">
+                            <div class="os-detail-header"><h3>Inter-Process Communication</h3></div>
+                            <div class="os-detail-body"><p>Named Pipes (FIFO) connect Red Team and C++ Engine to the Python Backend. Non-blocking write on C++ side, blocking read on Python side.</p><div class="os-tags"><span class="os-tag">Named Pipes</span><span class="os-tag">mkfifo</span><span class="os-tag">O_NONBLOCK</span></div></div>
+                        </div>
+                        <div class="os-detail-card" data-page="os-signals">
+                            <div class="os-detail-header"><h3>Signal Handling</h3></div>
+                            <div class="os-detail-body"><p>Registers <code>signal(SIGINT, handler)</code> and <code>signal(SIGTERM, handler)</code> for graceful shutdown. Parent forwards signals to child.</p><div class="os-tags"><span class="os-tag">SIGINT</span><span class="os-tag">SIGTERM</span><span class="os-tag">Async Events</span></div></div>
+                        </div>
+                        <div class="os-detail-card" data-page="response">
+                            <div class="os-detail-header"><h3>Process Control &amp; Termination</h3></div>
+                            <div class="os-detail-body"><p>Suspicious processes terminated using <code>kill(pid, SIGKILL)</code> in both C++ and Python. OS-level enforcement.</p><div class="os-tags"><span class="os-tag">kill()</span><span class="os-tag">SIGKILL</span><span class="os-tag">os.kill()</span></div></div>
+                        </div>
+                        <div class="os-detail-card" data-page="os-process">
+                            <div class="os-detail-header"><h3>/proc Filesystem Interaction</h3></div>
+                            <div class="os-detail-body"><p>Reads <code>/proc/[pid]/comm</code>, <code>/proc/[pid]/cmdline</code>, and <code>/proc/[pid]/status</code> for process name, command, state, threads, memory.</p><div class="os-tags"><span class="os-tag">/proc/comm</span><span class="os-tag">/proc/cmdline</span><span class="os-tag">/proc/status</span></div></div>
+                        </div>
+                        <div class="os-detail-card" data-page="os-resources">
+                            <div class="os-detail-header"><h3>Resource Monitoring</h3></div>
+                            <div class="os-detail-body"><p>Dedicated thread reads <code>/proc/stat</code> for CPU and <code>/proc/meminfo</code> for memory. Alerts at &gt;90% threshold.</p><div class="os-tags"><span class="os-tag">CPU %</span><span class="os-tag">Memory %</span><span class="os-tag">/proc/stat</span></div></div>
+                        </div>
+                        <div class="os-detail-card" data-page="os-threads">
+                            <div class="os-detail-header"><h3>Concurrency &amp; Parallel Design</h3></div>
+                            <div class="os-detail-body"><p>Multi-process (fork) + multi-thread (pthread) + multi-service (Backend, Dashboard, Red Team) all working in parallel.</p><div class="os-tags"><span class="os-tag">Parallel</span><span class="os-tag">Multi-Service</span><span class="os-tag">Task Distribution</span></div></div>
+                        </div>
+                        <div class="os-detail-card" data-page="os-process">
+                            <div class="os-detail-header"><h3>Fault Tolerance &amp; Supervision</h3></div>
+                            <div class="os-detail-body"><p>Parent runs supervision loop: if child crashes, it restarts after 2s. Uses <code>WIFEXITED</code>, <code>WIFSIGNALED</code> macros.</p><div class="os-tags"><span class="os-tag">Restart Loop</span><span class="os-tag">waitpid</span><span class="os-tag">Fault Recovery</span></div></div>
+                        </div>
+                    </div>
+                        </div>
+                        <aside class="concept-viz-aside" aria-label="Concept map">
+                            <h3 class="thread-viz-title">Architecture map</h3>
+                            <p class="thread-viz-lead">Ten integrated concepts; the highlighted card rotates to show how each piece connects to the live engine.</p>
+                            <div class="concept-viz-map">
+                                <div class="concept-viz-node" data-concept-viz-node><strong>1</strong> fork / wait</div>
+                                <div class="concept-viz-node" data-concept-viz-node><strong>2</strong> pthread workers</div>
+                                <div class="concept-viz-node" data-concept-viz-node><strong>3</strong> mutex /proc</div>
+                                <div class="concept-viz-node" data-concept-viz-node><strong>4</strong> named pipe IPC</div>
+                                <div class="concept-viz-node" data-concept-viz-node><strong>5</strong> SIGINT / SIGTERM</div>
+                                <div class="concept-viz-node" data-concept-viz-node><strong>6</strong> kill / SIGKILL</div>
+                                <div class="concept-viz-node" data-concept-viz-node><strong>7</strong> /proc metadata</div>
+                                <div class="concept-viz-node" data-concept-viz-node><strong>8</strong> CPU / MEM</div>
+                                <div class="concept-viz-node" data-concept-viz-node><strong>9</strong> parallel design</div>
+                                <div class="concept-viz-node" data-concept-viz-node><strong>10</strong> supervision</div>
+                            </div>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ════════ INDIVIDUAL OS CONCEPT PAGES WITH REAL CODE ════════ -->
+
+            <main id="page-os-process" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                    <div class="concept-detail-hero"><div><h2>Process Creation &amp; Management</h2><p class="hero-sub">fork(), wait(), Parent-Child Architecture</p></div></div>
+                    <div class="concept-detail-content">
+                        <div class="detail-section"><h3>How It Works</h3><p>The <code>main.cpp</code> C++ engine uses <code>fork()</code> to create a child process. The parent acts as a supervisor while the child runs 3 monitoring threads. <code>waitpid()</code> collects exit status to prevent zombie processes and enable crash-restart.</p></div>
+                        <div class="detail-section"><h3>Source Code — main.cpp (complete)</h3><pre><code>#include &lt;iostream&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/wait.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;cstdlib&gt;
+#include "process_monitor.h"
+#include "behavior_detector.h"
+#include "resource_monitor.h"
+
+// 5. Signal Handling — async-signal-safe flag
+volatile sig_atomic_t running = 1;
+static pid_t child_pid = -1;
+
+// 5. Parent signal handler
+void signal_handler(int signum) {
+    if (signum == SIGINT) {
+        std::cout &lt;&lt; "\n[SIGNAL] Caught SIGINT (Ctrl+C), initiating graceful shutdown..." &lt;&lt; std::endl;
+    } else if (signum == SIGTERM) {
+        std::cout &lt;&lt; "\n[SIGNAL] Caught SIGTERM, initiating graceful shutdown..." &lt;&lt; std::endl;
+    }
+    running = 0;
+    // Forward signal to child for coordinated shutdown
+    if (child_pid &gt; 0) {
+        kill(child_pid, signum);
+    }
+}
+
+// 5. Child signal handler
+void child_signal_handler(int signum) {
+    std::cout &lt;&lt; "[SIGNAL] Child received signal " &lt;&lt; signum &lt;&lt; ", stopping threads..." &lt;&lt; std::endl;
+    running = 0;
+}
+
+// 2. Multithreading — child engine runs 3 POSIX threads
+void run_child_engine() {
+    signal(SIGINT, child_signal_handler);
+    signal(SIGTERM, child_signal_handler);
+
+    pthread_t monitor_thread, detector_thread, resource_thread;
+
+    // Thread 1: Process Monitor (enumerates /proc)
+    pthread_create(&amp;monitor_thread, NULL, start_process_monitor, NULL);
+    // Thread 2: Behavior Detector (anomaly scanning)
+    pthread_create(&amp;detector_thread, NULL, start_behavior_detector, NULL);
+    // Thread 3: Resource Monitor (CPU &amp; Memory)
+    pthread_create(&amp;resource_thread, NULL, start_resource_monitor, NULL);
+
+    pthread_join(monitor_thread, NULL);
+    pthread_join(detector_thread, NULL);
+    pthread_join(resource_thread, NULL);
+
+    std::cout &lt;&lt; "[*] Child engine: All worker threads stopped." &lt;&lt; std::endl;
+}
+
+// 1. Process Creation — fork() + 10. Fault Tolerance — restart loop
+int main() {
+    std::cout &lt;&lt; "[*] Starting Blue Team OS Engine (Parent PID: " &lt;&lt; getpid() &lt;&lt; ")" &lt;&lt; std::endl;
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+
+    while (running) {
+        pid_t pid = fork();  // 1. Process Creation
+        if (pid &lt; 0) {
+            std::cerr &lt;&lt; "[!] fork() failed." &lt;&lt; std::endl;
+            return 1;
+        }
+        if (pid == 0) {
+            // CHILD PROCESS — runs monitoring engine
+            std::cout &lt;&lt; "[*] Child engine started (PID: " &lt;&lt; getpid() &lt;&lt; ")" &lt;&lt; std::endl;
+            run_child_engine();
+            _exit(0);
+        } else {
+            // PARENT PROCESS — supervises child
+            child_pid = pid;
+            int status;
+            waitpid(pid, &amp;status, 0);  // 1. Zombie prevention
+
+            if (!running) break;  // Graceful shutdown
+
+            // 10. Fault Tolerance — restart crashed child
+            if (WIFEXITED(status) &amp;&amp; WEXITSTATUS(status) != 0) {
+                std::cerr &lt;&lt; "[!] Child exited with error (code "
+                          &lt;&lt; WEXITSTATUS(status) &lt;&lt; "), restarting in 2s..." &lt;&lt; std::endl;
+                sleep(2);
+                continue;
+            } else if (WIFSIGNALED(status)) {
+                std::cerr &lt;&lt; "[!] Child killed by signal " &lt;&lt; WTERMSIG(status)
+                          &lt;&lt; ", restarting in 2s..." &lt;&lt; std::endl;
+                sleep(2);
+                continue;
+            }
+            break;  // Normal exit
+        }
+    }
+    std::cout &lt;&lt; "[*] Parent shutting down." &lt;&lt; std::endl;
+    return 0;
+}</code></pre></div>
+                        <div class="detail-section"><h3>File</h3><p><code>os_engine_cpp/src/main.cpp</code></p></div>
+                    </div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="fork and waitpid visualization">
+                            <h3 class="thread-viz-title">Parent / child</h3>
+                            <p class="thread-viz-lead">Supervisor <strong>fork()</strong>s the monitoring engine, then blocks on <strong>waitpid()</strong>. Restart logic uses <code>WIFEXITED</code> / <code>WIFSIGNALED</code>.</p>
+                            <div class="viz-fork-row">
+                                <div id="viz-os-process-parent" class="viz-proc-card">
+                                    <div class="viz-label">Parent</div>
+                                    <div class="viz-sub">waitpid · forward signals · restart on crash</div>
+                                </div>
+                                <div class="viz-fork-join">fork()</div>
+                                <div id="viz-os-process-child" class="viz-proc-card">
+                                    <div class="viz-label">Child</div>
+                                    <div class="viz-sub">run_child_engine() · 3× pthread_join</div>
+                                </div>
+                            </div>
+                            <p class="viz-dynamic-caption" id="viz-os-process-caption"></p>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
+            <main id="page-os-threads" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                    <div class="concept-detail-hero"><div><h2>Multithreading (Concurrency)</h2><p class="hero-sub">POSIX Threads — pthread_create, pthread_join</p></div></div>
+                    <div class="concept-detail-content">
+                        <div class="detail-section"><h3>How It Works</h3><p>Three threads run concurrently inside the child process: Process Monitor, Behavior Detector, and Resource Monitor. Each runs an infinite loop performing its task with periodic <code>sleep()</code> intervals.</p></div>
+                        <div class="detail-section"><h3>Thread Entry Points (from source files)</h3><pre><code>// ─── process_monitor.cpp ─── Thread 1
+void* start_process_monitor(void* arg) {
+    std::cout &lt;&lt; "[+] Process Monitor thread started (TID in PID: "
+              &lt;&lt; getpid() &lt;&lt; ")" &lt;&lt; std::endl;
+    while(true) {
+        int count = get_process_count();
+        std::cout &lt;&lt; "[MONITOR] Process count: " &lt;&lt; count &lt;&lt; std::endl;
+        if (count &gt; 500) {
+            std::cout &lt;&lt; "[MONITOR] Warning: High process count ("
+                      &lt;&lt; count &lt;&lt; ")" &lt;&lt; std::endl;
+        }
+        sleep(5);
+    }
+    return NULL;
+}
+
+// ─── behavior_detector.cpp ─── Thread 2
+void* start_behavior_detector(void* arg) {
+    std::cout &lt;&lt; "[+] Behavior Detector thread started." &lt;&lt; std::endl;
+    int last_process_cnt = get_process_count();
+
+    while(true) {
+        int cur_cnt = get_process_count();
+
+        // Detect rapid process spike (&gt;20 new in one cycle)
+        if ((cur_cnt - last_process_cnt) &gt; 20) {
+            send_event_to_backend("PROCESS_SPIKE",
+                "Detected rapid process count spike",
+                getpid(), "system", 3);
+        }
+        last_process_cnt = cur_cnt;
+
+        // Scan for reverse shell processes (nc, ncat, netcat)
+        auto pids = get_all_pids_safe();  // mutex-protected
+        for (int p : pids) {
+            std::string pname = get_process_name(p);
+            if (pname == "nc" || pname == "ncat" || pname == "netcat") {
+                send_event_to_backend("SUSPICIOUS_PROC",
+                    "Detected reverse shell: " + pname, p, pname, 3);
+            }
+        }
+        sleep(2);
+    }
+    return NULL;
+}
+
+// ─── resource_monitor.cpp ─── Thread 3
+void* start_resource_monitor(void* arg) {
+    std::cout &lt;&lt; "[+] Resource Monitor thread started." &lt;&lt; std::endl;
+    get_cpu_usage();  // prime the delta
+    sleep(1);
+
+    while (true) {
+        CpuUsage cpu = get_cpu_usage();
+        MemoryInfo mem = get_memory_info();
+
+        std::cout &lt;&lt; "[RES] CPU: " &lt;&lt; cpu.usage_percent &lt;&lt; "% | MEM: "
+                  &lt;&lt; mem.usage_percent &lt;&lt; "%" &lt;&lt; std::endl;
+
+        if (cpu.usage_percent &gt; 90.0) {
+            send_event_to_backend("HIGH_CPU",
+                "CPU usage exceeded 90%", getpid(), "resource_monitor", 3);
+        }
+        if (mem.usage_percent &gt; 90.0) {
+            send_event_to_backend("HIGH_MEMORY",
+                "Memory usage exceeded 90%", getpid(), "resource_monitor", 3);
+        }
+        sleep(5);
+    }
+    return NULL;
+}</code></pre></div>
+                        <div class="detail-section"><h3>Files</h3><p><code>main.cpp</code>, <code>process_monitor.cpp</code>, <code>behavior_detector.cpp</code>, <code>resource_monitor.cpp</code></p></div>
+                    </div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="Thread execution visualization">
+                            <div class="thread-viz-intro">
+                                <h3 class="thread-viz-title">Concurrent execution</h3>
+                                <p class="thread-viz-lead">Each lane mirrors the loop on the left: a short <strong>work</strong> burst (mutex, syscalls, logs), then blocking <strong>sleep(N)</strong>. Timings match the implementation.</p>
+                            </div>
+                            <div class="thread-viz-lanes">
+                                <div class="thread-viz-lane" id="thread-viz-monitor">
+                                    <div class="thread-viz-lane-head">
+                                        <span class="thread-viz-tag">T1</span>
+                                        <div>
+                                            <div class="thread-viz-name">Process Monitor</div>
+                                            <div class="thread-viz-file">process_monitor.cpp · sleep(5)</div>
+                                        </div>
+                                    </div>
+                                    <div class="thread-viz-track" role="img" aria-label="Process monitor timeline">
+                                        <div class="thread-viz-work-pulse" data-thread-viz-work></div>
+                                        <div class="thread-viz-sleep-fill" data-thread-viz-sleep></div>
+                                    </div>
+                                    <ul class="thread-viz-steps" data-thread-viz-steps>
+                                        <li data-step="0">get_process_count()</li>
+                                        <li data-step="1">log process count</li>
+                                        <li data-step="2">warn if count &gt; 500</li>
+                                        <li data-step="sleep">sleep(5)</li>
+                                    </ul>
+                                    <p class="thread-viz-status" data-thread-viz-status></p>
+                                </div>
+                                <div class="thread-viz-lane" id="thread-viz-behavior">
+                                    <div class="thread-viz-lane-head">
+                                        <span class="thread-viz-tag thread-viz-tag--b">T2</span>
+                                        <div>
+                                            <div class="thread-viz-name">Behavior Detector</div>
+                                            <div class="thread-viz-file">behavior_detector.cpp · sleep(2)</div>
+                                        </div>
+                                    </div>
+                                    <div class="thread-viz-track" role="img" aria-label="Behavior detector timeline">
+                                        <div class="thread-viz-work-pulse" data-thread-viz-work></div>
+                                        <div class="thread-viz-sleep-fill" data-thread-viz-sleep></div>
+                                    </div>
+                                    <ul class="thread-viz-steps" data-thread-viz-steps>
+                                        <li data-step="0">compare Δ process count</li>
+                                        <li data-step="1">get_all_pids_safe() scan</li>
+                                        <li data-step="2">match nc / ncat / netcat</li>
+                                        <li data-step="sleep">sleep(2)</li>
+                                    </ul>
+                                    <p class="thread-viz-status" data-thread-viz-status></p>
+                                </div>
+                                <div class="thread-viz-lane" id="thread-viz-resource">
+                                    <div class="thread-viz-lane-head">
+                                        <span class="thread-viz-tag thread-viz-tag--c">T3</span>
+                                        <div>
+                                            <div class="thread-viz-name">Resource Monitor</div>
+                                            <div class="thread-viz-file">resource_monitor.cpp · prime + sleep(5)</div>
+                                        </div>
+                                    </div>
+                                    <div class="thread-viz-track" role="img" aria-label="Resource monitor timeline">
+                                        <div class="thread-viz-work-pulse" data-thread-viz-work></div>
+                                        <div class="thread-viz-sleep-fill" data-thread-viz-sleep></div>
+                                    </div>
+                                    <ul class="thread-viz-steps" data-thread-viz-steps>
+                                        <li data-step="prime">get_cpu_usage() prime</li>
+                                        <li data-step="0">get_cpu_usage() · get_memory_info()</li>
+                                        <li data-step="1">log CPU &amp; MEM %</li>
+                                        <li data-step="2">alert if &gt; 90%</li>
+                                        <li data-step="sleep">sleep(5)</li>
+                                    </ul>
+                                    <p class="thread-viz-status" data-thread-viz-status></p>
+                                </div>
+                            </div>
+                            <p class="thread-viz-footnote">All three timelines run in parallel in the same address space (child process), interleaved by the OS scheduler.</p>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
+            <main id="page-os-sync" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                    <div class="concept-detail-hero"><div><h2>Synchronization (Mutex)</h2><p class="hero-sub">Critical Section Protection, Race Condition Prevention</p></div></div>
+                    <div class="concept-detail-content">
+                        <div class="detail-section"><h3>How It Works</h3><p>A <code>pthread_mutex_t</code> guards access to /proc directory enumeration. Both process monitor and behavior detector threads acquire the lock before reading process data, preventing data races on the shared PID list.</p></div>
+                        <div class="detail-section"><h3>Source Code — process_monitor.cpp</h3><pre><code>// Global mutex — shared between all threads
+pthread_mutex_t proc_mut = PTHREAD_MUTEX_INITIALIZER;
+
+// Raw /proc enumeration (NOT thread-safe)
+std::vector&lt;int&gt; get_all_pids() {
+    std::vector&lt;int&gt; pids;
+    DIR* dir = opendir("/proc");
+    if (!dir) return pids;
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry-&gt;d_type == DT_DIR) {
+            std::string name = entry-&gt;d_name;
+            bool is_pid = true;
+            for (char c : name) {
+                if (!isdigit(c)) { is_pid = false; break; }
+            }
+            if (is_pid &amp;&amp; !name.empty()) {
+                pids.push_back(std::stoi(name));
+            }
+        }
+    }
+    closedir(dir);
+    return pids;
+}
+
+// Mutex-protected process count
+int get_process_count() {
+    pthread_mutex_lock(&amp;proc_mut);
+    int count = get_all_pids().size();
+    pthread_mutex_unlock(&amp;proc_mut);
+    return count;
+}
+
+// Mutex-protected PID list access (thread-safe)
+std::vector&lt;int&gt; get_all_pids_safe() {
+    pthread_mutex_lock(&amp;proc_mut);
+    std::vector&lt;int&gt; pids = get_all_pids();
+    pthread_mutex_unlock(&amp;proc_mut);
+    return pids;
+}</code></pre></div>
+                        <div class="detail-section"><h3>Usage in behavior_detector.cpp</h3><pre><code>// Uses mutex-protected variant to prevent race condition
+auto pids = get_all_pids_safe();
+for (int p : pids) {
+    std::string pname = get_process_name(p);
+    if (pname == "nc" || pname == "ncat" || pname == "netcat") {
+        send_event_to_backend("SUSPICIOUS_PROC",
+            "Detected reverse shell: " + pname, p, pname, 3);
+    }
+}</code></pre></div>
+                        <div class="detail-section"><h3>Files</h3><p><code>process_monitor.cpp</code>, <code>behavior_detector.cpp</code></p></div>
+                    </div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="Mutex visualization">
+                            <h3 class="thread-viz-title">proc_mut</h3>
+                            <p class="thread-viz-lead">Only one thread owns <code>pthread_mutex_t</code> while walking <code>/proc</code>; the other spins until <strong>unlock</strong>.</p>
+                            <div class="viz-mutex-row">
+                                <div id="viz-mutex-thread-a" class="viz-thread-pill">Monitor<br>get_process_count</div>
+                                <div id="viz-mutex-lock" class="viz-mutex-lock">🔓</div>
+                                <div id="viz-mutex-thread-b" class="viz-thread-pill">Detector<br>get_all_pids_safe</div>
+                            </div>
+                            <p class="viz-dynamic-caption" id="viz-os-sync-caption"></p>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
+            <main id="page-os-ipc" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                    <div class="concept-detail-hero"><div><h2>Inter-Process Communication</h2><p class="hero-sub">Named Pipes (FIFO), Message Passing</p></div></div>
+                    <div class="concept-detail-content">
+                        <div class="detail-section"><h3>How It Works</h3><p>Communication between components uses one named pipe path defined in <code>backend/ipc_config.py</code> (Windows: <code>backend/hidrs_events.pipe</code>; Linux: <code>/tmp/hidrs_events</code>, matching the C++ <code>open()</code> path). The C++ engine writes JSON with non-blocking I/O; the Python backend reads line-by-line; Red Team scripts append JSON lines.</p></div>
+                        <div class="detail-section"><h3>Single path — ipc_config.py</h3><pre><code># Used by main_backend.py and all red_team_py writers
+from ipc_config import PIPE_PATH, setup_named_pipe
+
+# PIPE_PATH → backend/hidrs_events.pipe (Windows) or /tmp/hidrs_events (POSIX)
+# setup_named_pipe() → regular file on Windows, os.mkfifo() on Linux/macOS</code></pre></div>
+                        <div class="detail-section"><h3>C++ Writer — behavior_detector.cpp</h3><pre><code>void send_event_to_backend(const std::string&amp; event_type,
+    const std::string&amp; description, int pid,
+    const std::string&amp; process_name, int severity) {
+
+    int fifo = open("/tmp/hidrs_events", O_WRONLY | O_NONBLOCK);
+    if (fifo &lt; 0) { return; }
+
+    std::string payload = "{\"event_type\": \"" + event_type + "\", "
+        "\"description\": \"" + description + "\", "
+        "\"source\": \"C++_OS_Engine\", "
+        "\"pid\": " + std::to_string(pid) + ", "
+        "\"process_name\": \"" + process_name + "\", "
+        "\"severity\": " + std::to_string(severity) + "}\n";
+
+    write(fifo, payload.c_str(), payload.length());
+    close(fifo);
+}</code></pre></div>
+                        <div class="detail-section"><h3>Python Reader — main_backend.py</h3><pre><code>from ipc_config import PIPE_PATH, setup_named_pipe
+
+def main():
+    setup_named_pipe()
+    print("[*] Backend Server Running...")
+    while True:
+        try:
+            with open(PIPE_PATH, 'r') as fifo:
+                while True:
+                    data = fifo.readline()
+                    if len(data) == 0:
+                        if os.name == 'nt':
+                            time.sleep(0.5)  # Windows file: wait for more data
+                            continue
+                        break
+                    line = data.strip()
+                    if line:
+                        process_message(line)
+        except KeyboardInterrupt:
+            break</code></pre></div>
+                        <div class="detail-section"><h3>Red Team Writer — login_simulator.py</h3><pre><code>sys.path.insert(0, os.path.join(BASE_DIR, 'backend'))
+from ipc_config import PIPE_PATH
+
+def send_to_blue_team(event_data):
+    if not os.path.exists(PIPE_PATH):
+        print("[!] Pipe missing — start main_backend.py first (creates path).")
+        return
+    with open(PIPE_PATH, 'a') as f:
+        f.write(json.dumps(event_data) + "\n")</code></pre></div>
+                        <div class="detail-section"><h3>Verify it works</h3><p>Terminal 1: <code>python backend/main_backend.py</code> · Terminal 2: <code>python backend/test_ipc_ping.py</code> — you should see <code>[BACKEND] Recv Event: IPC_TEST</code>. The dashboard polls <code>/api/ipc/status</code> (right panel).</p></div>
+                        <div class="detail-section"><h3>Files</h3><p><code>backend/ipc_config.py</code>, <code>behavior_detector.cpp</code>, <code>main_backend.py</code>, <code>login_simulator.py</code>, <code>process_flood.py</code>, <code>file_tamper_simulator.py</code>, <code>backend/test_ipc_ping.py</code></p></div>
+                    </div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="FIFO flow">
+                            <h3 class="thread-viz-title">Named pipe</h3>
+                            <p class="thread-viz-lead">C++ <strong>O_NONBLOCK</strong> write · Python blocking <strong>readline</strong> · Red Team appends JSON the same way.</p>
+                            <div class="ipc-live-panel" id="ipc-live-panel">
+                                <div class="ipc-live-row">
+                                    <span class="ipc-status-dot" id="ipc-status-dot" aria-hidden="true"></span>
+                                    <span class="ipc-status-text" id="ipc-status-text">Checking pipe…</span>
+                                </div>
+                                <code class="ipc-path-line" id="ipc-path-display"></code>
+                                <p class="ipc-live-hint">Live from <code>/api/ipc/status</code> · Start backend, then run <code>python backend/test_ipc_ping.py</code></p>
+                            </div>
+                            <div class="viz-ipc-flow">
+                                <div class="viz-ipc-box">C++ engine<br><code>write(fifo)</code></div>
+                                <div class="viz-ipc-pipe"><div class="viz-ipc-dot" id="viz-ipc-dot"></div></div>
+                                <div class="viz-ipc-box">Python backend<br><code>readline()</code></div>
+                            </div>
+                            <p class="viz-dynamic-caption" id="viz-os-ipc-caption"></p>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
+            <main id="page-os-signals" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                    <div class="concept-detail-hero"><div><h2>Signal Handling</h2><p class="hero-sub">SIGINT, SIGTERM, Graceful Shutdown</p></div></div>
+                    <div class="concept-detail-content">
+                        <div class="detail-section"><h3>How It Works</h3><p>Both parent and child register signal handlers. On Ctrl+C (SIGINT) or kill command (SIGTERM), the handler sets <code>running = 0</code> and forwards the signal to the child for coordinated shutdown. Uses <code>volatile sig_atomic_t</code> for async-signal-safety.</p></div>
+                        <div class="detail-section"><h3>Source Code — main.cpp</h3><pre><code>// Global flag — volatile sig_atomic_t is async-signal-safe
+volatile sig_atomic_t running = 1;
+static pid_t child_pid = -1;
+
+// Parent signal handler — SIGINT (Ctrl+C) and SIGTERM
+void signal_handler(int signum) {
+    if (signum == SIGINT) {
+        std::cout &lt;&lt; "\n[SIGNAL] Caught SIGINT (Ctrl+C), "
+                  &lt;&lt; "initiating graceful shutdown..." &lt;&lt; std::endl;
+    } else if (signum == SIGTERM) {
+        std::cout &lt;&lt; "\n[SIGNAL] Caught SIGTERM, "
+                  &lt;&lt; "initiating graceful shutdown..." &lt;&lt; std::endl;
+    }
+    running = 0;
+
+    // Forward signal to child for coordinated shutdown
+    if (child_pid &gt; 0) {
+        kill(child_pid, signum);
+    }
+}
+
+// Child signal handler — stops all worker threads
+void child_signal_handler(int signum) {
+    std::cout &lt;&lt; "[SIGNAL] Child process received signal "
+              &lt;&lt; signum &lt;&lt; ", stopping threads..." &lt;&lt; std::endl;
+    running = 0;
+}
+
+// Registration in main():
+int main() {
+    signal(SIGINT, signal_handler);   // Register SIGINT handler
+    signal(SIGTERM, signal_handler);  // Register SIGTERM handler
+    // ... supervision loop ...
+}</code></pre></div>
+                        <div class="detail-section"><h3>File</h3><p><code>os_engine_cpp/src/main.cpp</code></p></div>
+                    </div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="Signal propagation">
+                            <h3 class="thread-viz-title">Graceful shutdown</h3>
+                            <p class="thread-viz-lead">Handlers use <code>volatile sig_atomic_t running</code>; parent forwards <strong>kill(child_pid, signum)</strong> so both processes exit cleanly.</p>
+                            <div class="viz-sig-flow">
+                                <div class="viz-sig-node" data-viz-sig-node>Keyboard / kill → SIGINT / SIGTERM</div>
+                                <div class="viz-sig-arrow">↓</div>
+                                <div class="viz-sig-node" data-viz-sig-node>Parent signal_handler → running=0</div>
+                                <div class="viz-sig-arrow">↓</div>
+                                <div class="viz-sig-node" data-viz-sig-node>Child handler → stop pthread workers</div>
+                            </div>
+                            <p class="viz-dynamic-caption" id="viz-os-signals-caption"></p>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
+            <main id="page-os-resources" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                    <div class="concept-detail-hero"><div><h2>Resource Monitoring</h2><p class="hero-sub">CPU &amp; Memory Tracking via /proc</p></div></div>
+                    <div class="concept-detail-content">
+                        <div class="detail-section"><h3>How It Works</h3><p>A dedicated thread reads <code>/proc/stat</code> for CPU usage (delta between samples) and <code>/proc/meminfo</code> for memory stats. Per-process data via <code>/proc/[pid]/stat</code>. Alerts when usage exceeds 90%.</p></div>
+                        <div class="detail-section"><h3>Source Code — resource_monitor.cpp (complete)</h3><pre><code>#include "resource_monitor.h"
+#include &lt;fstream&gt;
+#include &lt;sstream&gt;
+#include &lt;iostream&gt;
+#include &lt;unistd.h&gt;
+
+static unsigned long long prev_total = 0;
+static unsigned long long prev_idle = 0;
+
+// 8. Read CPU usage from /proc/stat
+CpuUsage get_cpu_usage() {
+    CpuUsage cpu = {0, 0, 0, 0, 0};
+    std::ifstream stat_file("/proc/stat");
+    if (!stat_file.is_open()) return cpu;
+
+    std::string line;
+    std::getline(stat_file, line);
+    std::istringstream iss(line);
+    std::string cpu_label;
+    unsigned long long user, nice, system, idle, iowait, irq, softirq, steal;
+    iss &gt;&gt; cpu_label &gt;&gt; user &gt;&gt; nice &gt;&gt; system &gt;&gt; idle
+        &gt;&gt; iowait &gt;&gt; irq &gt;&gt; softirq &gt;&gt; steal;
+
+    cpu.user = user; cpu.nice = nice;
+    cpu.system = system; cpu.idle = idle;
+
+    unsigned long long total_idle = idle + iowait;
+    unsigned long long total = user + nice + system + idle
+        + iowait + irq + softirq + steal;
+
+    unsigned long long diff_idle = total_idle - prev_idle;
+    unsigned long long diff_total = total - prev_total;
+    if (diff_total &gt; 0) {
+        cpu.usage_percent = (double)(diff_total - diff_idle)
+            / (double)diff_total * 100.0;
+    }
+    prev_idle = total_idle;
+    prev_total = total;
+    return cpu;
+}
+
+// 8. Read memory info from /proc/meminfo
+MemoryInfo get_memory_info() {
+    MemoryInfo mem = {0, 0, 0, 0, 0, 0.0};
+    std::ifstream meminfo("/proc/meminfo");
+    if (!meminfo.is_open()) return mem;
+
+    std::string line;
+    while (std::getline(meminfo, line)) {
+        std::istringstream iss(line);
+        std::string key;
+        unsigned long value;
+        iss &gt;&gt; key &gt;&gt; value;
+        if (key == "MemTotal:")          mem.total_kb = value;
+        else if (key == "MemFree:")      mem.free_kb = value;
+        else if (key == "MemAvailable:") mem.available_kb = value;
+        else if (key == "Buffers:")      mem.buffers_kb = value;
+        else if (key == "Cached:")       mem.cached_kb = value;
+    }
+    if (mem.total_kb &gt; 0) {
+        unsigned long used = mem.total_kb - mem.available_kb;
+        mem.usage_percent = (double)used / (double)mem.total_kb * 100.0;
+    }
+    return mem;
+}
+
+// 8. Resource monitor thread — runs every 5 seconds
+void* start_resource_monitor(void* arg) {
+    std::cout &lt;&lt; "[+] Resource Monitor thread started." &lt;&lt; std::endl;
+    get_cpu_usage();  // Prime the delta calculation
+    sleep(1);
+
+    while (true) {
+        CpuUsage cpu = get_cpu_usage();
+        MemoryInfo mem = get_memory_info();
+
+        std::cout &lt;&lt; "[RES] CPU: " &lt;&lt; cpu.usage_percent
+                  &lt;&lt; "% | MEM: " &lt;&lt; mem.usage_percent &lt;&lt; "%"
+                  &lt;&lt; " (" &lt;&lt; (mem.total_kb - mem.available_kb) / 1024
+                  &lt;&lt; "MB / " &lt;&lt; mem.total_kb / 1024 &lt;&lt; "MB)"
+                  &lt;&lt; std::endl;
+
+        if (cpu.usage_percent &gt; 90.0) {
+            send_event_to_backend("HIGH_CPU",
+                "CPU usage exceeded 90% threshold",
+                getpid(), "resource_monitor", 3);
+        }
+        if (mem.usage_percent &gt; 90.0) {
+            send_event_to_backend("HIGH_MEMORY",
+                "Memory usage exceeded 90% threshold",
+                getpid(), "resource_monitor", 3);
+        }
+        sleep(5);
+    }
+    return NULL;
+}</code></pre></div>
+                        <div class="detail-section"><h3>Header — resource_monitor.h</h3><pre><code>#ifndef RESOURCE_MONITOR_H
+#define RESOURCE_MONITOR_H
+#include &lt;string&gt;
+
+struct CpuUsage {
+    unsigned long long user, nice, system, idle;
+    double usage_percent;
+};
+
+struct MemoryInfo {
+    unsigned long total_kb, free_kb, available_kb;
+    unsigned long buffers_kb, cached_kb;
+    double usage_percent;
+};
+
+struct ProcessStats {
+    int pid;
+    std::string name;
+    unsigned long utime, stime;
+    unsigned long vsize;
+    long rss;
+    int num_threads;
+};
+
+CpuUsage get_cpu_usage();
+MemoryInfo get_memory_info();
+ProcessStats get_process_stats(int pid);
+void* start_resource_monitor(void* arg);
+
+// From behavior_detector (used for alerting)
+void send_event_to_backend(const std::string&amp; event_type,
+    const std::string&amp; desc, int pid,
+    const std::string&amp; pname, int severity);
+
+#endif</code></pre></div>
+                        <div class="detail-section"><h3>Files</h3><p><code>resource_monitor.cpp</code>, <code>resource_monitor.h</code></p></div>
+                    </div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="/proc resource sampling">
+                            <h3 class="thread-viz-title">resource_monitor.h → runtime</h3>
+                            <p class="thread-viz-lead">Same structs as the header: <strong>CpuUsage</strong>, <strong>MemoryInfo</strong>, <strong>ProcessStats</strong> — filled from <code>/proc</code>, then thresholds call <code>send_event_to_backend</code>.</p>
+                            <div class="res-pipeline" id="viz-res-pipeline" aria-hidden="true">
+                                <span class="res-pipe-node" data-viz-res-pipe="0">/proc/stat</span>
+                                <span class="res-pipe-join">→</span>
+                                <span class="res-pipe-node" data-viz-res-pipe="1">CpuUsage</span>
+                                <span class="res-pipe-join">→</span>
+                                <span class="res-pipe-node" data-viz-res-pipe="2">/proc/meminfo</span>
+                                <span class="res-pipe-join">→</span>
+                                <span class="res-pipe-node" data-viz-res-pipe="3">MemoryInfo</span>
+                                <span class="res-pipe-join">→</span>
+                                <span class="res-pipe-node" data-viz-res-pipe="4">/proc/[pid]/stat</span>
+                                <span class="res-pipe-join">→</span>
+                                <span class="res-pipe-node" data-viz-res-pipe="5">send_event_to_backend</span>
+                            </div>
+                            <div class="res-struct-row">
+                                <div class="res-mini-struct" data-viz-res-box="cpu">
+                                    <div class="rms-title">struct CpuUsage</div>
+                                    <div class="rms-fields" id="viz-res-cpu-fields">user, nice, system, idle → Δ →</div>
+                                    <div class="rms-hl">double usage_percent</div>
+                                </div>
+                                <div class="res-mini-struct" data-viz-res-box="mem">
+                                    <div class="rms-title">struct MemoryInfo</div>
+                                    <div class="rms-fields" id="viz-res-mem-fields">MemTotal…MemAvailable →</div>
+                                    <div class="rms-hl">double usage_percent</div>
+                                </div>
+                                <div class="res-mini-struct" data-viz-res-box="proc">
+                                    <div class="rms-title">struct ProcessStats</div>
+                                    <div class="rms-fields" id="viz-res-proc-fields">pid, utime, stime, vsize, rss…</div>
+                                </div>
+                            </div>
+                            <div class="res-alert-strip" id="viz-res-alert-strip">
+                                threshold: if (cpu &gt; 90 || mem &gt; 90) → HIGH_CPU / HIGH_MEMORY
+                            </div>
+                            <h4 class="res-gauges-heading">Simulated load (5s loop)</h4>
+                            <div class="viz-gauge">
+                                <div class="viz-gauge-label"><span>CPU %</span><span id="viz-res-cpu-label"></span></div>
+                                <div class="viz-gauge-bar"><div class="viz-gauge-fill" id="viz-res-cpu-fill"></div></div>
+                            </div>
+                            <div class="viz-gauge">
+                                <div class="viz-gauge-label"><span>Memory %</span><span id="viz-res-mem-label"></span></div>
+                                <div class="viz-gauge-bar"><div class="viz-gauge-fill" id="viz-res-mem-fill"></div></div>
+                            </div>
+                            <p class="viz-dynamic-caption" id="viz-os-resources-caption"></p>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ════════ PAGE: RED TEAM ════════ -->
+            <main id="page-red-team" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                    <div class="panel-heading"><h2>Red Team Simulation</h2><span class="panel-caption">Attack simulation scripts</span></div>
+                    <div class="red-team-grid" id="red-team-grid" role="list">
+                        <div class="red-team-card" role="listitem" tabindex="0" data-rt="0" aria-label="Brute Force Login simulation"><h3>Brute Force Login</h3><p>Simulates failed SSH login attempts. Sends AUTH_FAILED events with MEDIUM severity.</p><code>login_simulator.py</code></div>
+                        <div class="red-team-card" role="listitem" tabindex="0" data-rt="1" aria-label="Process Flood simulation"><h3>Process Flood</h3><p>Spawns multiple dummy processes to trigger process spike detection. HIGH severity.</p><code>process_flood.py</code></div>
+                        <div class="red-team-card" role="listitem" tabindex="0" data-rt="2" aria-label="File Tampering simulation"><h3>File Tampering</h3><p>Simulates unauthorized modification of critical system files. CRITICAL severity.</p><code>file_tamper_simulator.py</code></div>
+                        <div class="red-team-card" role="listitem" tabindex="0" data-rt="3" aria-label="Full Attack Suite simulation"><h3>Full Attack Suite</h3><p>Launches all attack vectors sequentially for comprehensive testing.</p><code>attack_controller.py</code></div>
+                    </div>
+                    <div class="red-team-deep-dive">
+                        <h3 class="rt-deep-title">End-to-end data path</h3>
+                        <p class="rt-deep-lead">Red Team scripts do not talk to the C++ engine directly — they append <strong>one JSON object per line</strong> to the same named pipe / file that <code>behavior_detector.cpp</code> uses, so <code>main_backend.py</code> can ingest everything in one reader loop.</p>
+                        <div class="rt-flow-diagram" aria-hidden="true">
+                            <div class="rt-flow-step"><span class="rt-fs">red_team_py</span><span class="rt-fsub">.py simulators</span></div>
+                            <span class="rt-flow-arrow">⬇</span>
+                            <div class="rt-flow-step rt-flow-json"><span class="rt-fs">JSON</span><span class="rt-fsub">event_type, severity…</span></div>
+                            <span class="rt-flow-arrow">⬇</span>
+                            <div class="rt-flow-step rt-flow-pipe"><span class="rt-fs">hidrs_events</span><span class="rt-fsub">FIFO / pipe file</span></div>
+                            <span class="rt-flow-arrow">⬇</span>
+                            <div class="rt-flow-step"><span class="rt-fs">main_backend</span><span class="rt-fsub">process_message()</span></div>
+                            <span class="rt-flow-arrow">⬇</span>
+                            <div class="rt-flow-step rt-flow-dash"><span class="rt-fs">DB + dashboard</span><span class="rt-fsub">alerts &amp; FSM</span></div>
+                        </div>
+                        <div class="rt-pipe-anim" aria-hidden="true">
+                            <span class="rt-pipe-label">shared channel</span>
+                            <div class="rt-pipe-track">
+                                <span class="rt-pipe-particle rt-p1"></span>
+                                <span class="rt-pipe-particle rt-p2"></span>
+                                <span class="rt-pipe-particle rt-p3"></span>
+                            </div>
+                        </div>
+                        <div class="rt-step-toolbar" id="rt-step-toolbar">
+                            <p class="rt-step-hint" id="rt-step-hint">Choose a script card above, then press <strong>Next</strong> to reveal the payload and console line by line.</p>
+                            <div class="rt-step-actions">
+                                <button type="button" class="btn-rt-next" id="rt-next-btn" disabled>Next</button>
+                                <button type="button" class="btn-rt-reset" id="rt-reset-btn" disabled>Reset</button>
+                            </div>
+                        </div>
+                        <div class="rt-json-panel rt-json-panel--idle" id="rt-json-panel">
+                            <div class="rt-json-hdr"><span>Live-style payload</span><span class="rt-json-badge" id="rt-json-badge">—</span></div>
+                            <pre class="rt-json-pre rt-json-pre--muted" id="rt-json-sample">Select a script, then use Next to show the JSON event.</pre>
+                        </div>
+                        <div class="rt-term-panel rt-term-panel--idle" id="rt-term-panel">
+                            <div class="rt-term-title">Simulated console</div>
+                            <div class="rt-term-body rt-term-body--muted" id="rt-term-log">Console output appears here one line per Next click.</div>
+                        </div>
+                    </div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="Red team activity">
+                            <h3 class="thread-viz-title">Attack scripts (simulated)</h3>
+                            <p class="thread-viz-lead">Each script writes JSON to the same <strong>FIFO</strong> the C++ engine uses. Timelines show burst → cooldown. <span class="rt-aside-hint">See left: pick a card, then step through payload and console with <strong>Next</strong>.</span></p>
+                            <div class="thread-viz-lanes">
+                                <div class="thread-viz-lane">
+                                    <div class="thread-viz-lane-head"><span class="thread-viz-tag">RT1</span><div><div class="thread-viz-name">Brute force login</div><div class="thread-viz-file">login_simulator.py</div></div></div>
+                                    <div class="thread-viz-track" id="viz-rt-login-track" role="img" aria-hidden="true">
+                                        <div class="thread-viz-work-pulse" data-thread-viz-work></div>
+                                        <div class="thread-viz-sleep-fill" data-thread-viz-sleep></div>
+                                    </div>
+                                    <p class="thread-viz-status" id="viz-rt-login-caption"></p>
+                                </div>
+                                <div class="thread-viz-lane">
+                                    <div class="thread-viz-lane-head"><span class="thread-viz-tag thread-viz-tag--b">RT2</span><div><div class="thread-viz-name">Process flood</div><div class="thread-viz-file">process_flood.py</div></div></div>
+                                    <div class="thread-viz-track" id="viz-rt-flood-track" role="img" aria-hidden="true">
+                                        <div class="thread-viz-work-pulse" data-thread-viz-work></div>
+                                        <div class="thread-viz-sleep-fill" data-thread-viz-sleep></div>
+                                    </div>
+                                    <p class="thread-viz-status" id="viz-rt-flood-caption"></p>
+                                </div>
+                                <div class="thread-viz-lane">
+                                    <div class="thread-viz-lane-head"><span class="thread-viz-tag thread-viz-tag--c">RT3</span><div><div class="thread-viz-name">File tampering</div><div class="thread-viz-file">file_tamper_simulator.py</div></div></div>
+                                    <div class="thread-viz-track" id="viz-rt-file-track" role="img" aria-hidden="true">
+                                        <div class="thread-viz-work-pulse" data-thread-viz-work></div>
+                                        <div class="thread-viz-sleep-fill" data-thread-viz-sleep></div>
+                                    </div>
+                                    <p class="thread-viz-status" id="viz-rt-file-caption"></p>
+                                </div>
+                                <div class="thread-viz-lane">
+                                    <div class="thread-viz-lane-head"><span class="thread-viz-tag">RT4</span><div><div class="thread-viz-name">Full suite</div><div class="thread-viz-file">attack_controller.py</div></div></div>
+                                    <div class="thread-viz-track" id="viz-rt-suite-track" role="img" aria-hidden="true">
+                                        <div class="thread-viz-work-pulse" data-thread-viz-work></div>
+                                        <div class="thread-viz-sleep-fill" data-thread-viz-sleep></div>
+                                    </div>
+                                    <p class="thread-viz-status" id="viz-rt-suite-caption"></p>
+                                </div>
+                            </div>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ════════ PAGE: RESPONSE ENGINE ════════ -->
+            <main id="page-response" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                    <div class="panel-heading"><h2>Response Engine</h2><span class="panel-caption">Active defense mechanisms</span></div>
+                    <div class="response-info">
+                        <div class="response-card"><h3>Active Defense</h3><p>When FSM reaches LOCKED state, <code>active_defense()</code> queries all processes linked to unresolved HIGH/CRITICAL alerts and terminates them via <code>os.kill(pid, SIGKILL)</code>.</p></div>
+                        <div class="response-card"><h3>C++ Response Engine</h3><p>Direct process termination from OS engine using <code>kill(pid, SIGKILL)</code> in <code>response_engine.cpp</code> for immediate threat neutralization.</p></div>
+                        <div class="response-card"><h3>FSM Auto-Escalation</h3><p>FSM automatically escalates: NORMAL to WARNING (1 HIGH or 3+ MEDIUM) to LOCKED (2+ HIGH). De-escalation happens when alerts are resolved.</p></div>
+                    </div>
+                    <div class="detail-section" style="margin-top:20px"><h3>Source Code — response_engine.cpp</h3><pre><code>#include "response_engine.h"
+#include &lt;signal.h&gt;
+#include &lt;iostream&gt;
+
+void trigger_response(int pid) {
+    std::cout &lt;&lt; "[RESPONSE] Killing suspicious process PID " &lt;&lt; pid &lt;&lt; std::endl;
+    kill(pid, SIGKILL);
+}</code></pre></div>
+                    <div class="detail-section" style="margin-top:16px"><h3>Source Code — process_service.py</h3><pre><code>def active_defense():
+    """Invoked when FSM State -&gt; LOCKED.
+    Kills all processes linked to unresolved HIGH/CRITICAL alerts."""
+    query = """
+    SELECT DISTINCT p.pid, p.process_name, e.event_id
+    FROM Processes p
+    JOIN Events e ON p.process_id = e.process_id
+    JOIN Alerts a ON e.event_id = a.event_id
+    JOIN Severity s ON a.severity_id = s.severity_id
+    WHERE a.is_resolved = FALSE
+      AND s.level_name IN ('HIGH', 'CRITICAL', 'MEDIUM')
+    """
+    bad_procs = fetch_query(query)
+
+    for proc in bad_procs:
+        pid = proc['pid']
+        name = proc['process_name']
+        try:
+            os.kill(pid, signal.SIGKILL)
+            msg = f"Terminated malicious process {name} (PID: {pid})"
+            print(f"[*] RESPONSE ENGINE: {msg}")
+            execute_query(
+                "INSERT INTO Events (event_type, description, source) "
+                "VALUES (%s, %s, %s)",
+                ('RESPONSE_ACTION', msg, 'Response_Engine'))
+            execute_query(
+                "UPDATE Alerts SET is_resolved=TRUE WHERE event_id=%s",
+                (proc['event_id'],))
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            print(f"[!] Permission denied to kill PID {pid}")</code></pre></div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="Response and FSM">
+                            <div id="viz-response-fsm" class="viz-fsm-badge state-normal">FSM: NORMAL</div>
+                            <p class="thread-viz-lead" style="margin-top:0">Escalation drives <strong>active_defense()</strong> and OS-level <strong>SIGKILL</strong>.</p>
+                            <div id="viz-response-kill-target" class="viz-kill-target">PID 8842 — malicious_proc — candidate → kill(pid, SIGKILL)</div>
+                            <p class="viz-dynamic-caption" id="viz-response-caption" style="margin-top:14px"></p>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <div id="defensive-overlay" class="hidden">
+        <div class="alert-box">
+            <h1>THREAT LEVEL: CRITICAL</h1>
+            <h2>DEFENSIVE MODE ACTIVATED</h2>
+            <p>Active Response Engine is neutralizing threats...</p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
+

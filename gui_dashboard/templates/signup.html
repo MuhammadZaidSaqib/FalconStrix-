@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>if ('scrollRestoration' in history) history.scrollRestoration = 'manual';</script>
+    <title>Create account - FalconStrix</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body class="theme-normal login-body">
+    <div class="login-shell">
+        <div class="login-grid">
+            <section class="login-intel-panel" aria-label="Account registration">
+                <div class="login-kicker">Onboarding</div>
+                <h1 class="login-hero-title">FalconStrix<br>Operator accounts</h1>
+                <p class="login-hero-copy">Create a dashboard login tied to SOC activity. Sign-ins, sign-outs, and registration appear in <strong>User Activity</strong> with your username.</p>
+                <div class="login-metrics">
+                    <div class="login-metric-card">
+                        <span class="metric-label">Policy</span>
+                        <strong>8+ chars</strong>
+                        <span class="metric-sub">Password minimum</span>
+                    </div>
+                    <div class="login-metric-card">
+                        <span class="metric-label">Role</span>
+                        <strong>user</strong>
+                        <span class="metric-sub">Self-registered</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="login-card">
+                <div class="login-brand">
+                    <div class="login-badge">New operator</div>
+                    <span class="brand-text">FalconStrix</span>
+                    <p class="login-tagline">Create your account</p>
+                </div>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="login-flash login-flash--{{ category }}" role="alert">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                <form class="login-form" method="post" action="/signup" autocomplete="on">
+                    <label class="login-label" for="username">Username</label>
+                    <input class="login-input" type="text" id="username" name="username" required minlength="3" maxlength="32" autocomplete="username" autofocus placeholder="operator.id">
+
+                    <label class="login-label" for="password">Password</label>
+                    <input class="login-input" type="password" id="password" name="password" required minlength="8" autocomplete="new-password" placeholder="at least 8 characters">
+
+                    <label class="login-label" for="password_confirm">Confirm password</label>
+                    <input class="login-input" type="password" id="password_confirm" name="password_confirm" required minlength="8" autocomplete="new-password" placeholder="repeat password">
+
+                    <button type="submit" class="login-submit">Create account</button>
+                </form>
+                <div class="login-footnote">
+                    <p class="login-alt">Already have an account? <a href="{{ url_for('login') }}">Sign in</a></p>
+                    <p class="login-hint">Admin account <code>admin</code> is reserved. Set <code>FALCON_DISABLE_SIGNUP=1</code> to close registration in production.</p>
+                </div>
+            </section>
+        </div>
+    </div>
+</body>
+</html>

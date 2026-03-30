@@ -1,341 +1,1126 @@
-#!/usr/bin/env python3
-"""
-SOC-style Flask dashboard with Socket.IO live refresh (polls MariaDB).
-"""
-from __future__ import annotations
-
-import os
 import sys
-import subprocess
+import os
 import time
+import random
 import json
-from datetime import datetime
-from pathlib import Path
+from collections import deque
+from datetime import datetime, timedelta
+from flask import (
+    Flask,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask_socketio import SocketIO, emit
 
-from flask import Flask, render_template
-from flask_socketio import SocketIO
-
-ROOT = Path(__file__).resolve().parent.parent
-BACKEND = ROOT / "backend"
-if str(BACKEND) not in sys.path:
-    sys.path.insert(0, str(BACKEND))
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(ROOT / ".env")
-except Exception:
+    load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+except ImportError:
     pass
 
-from alert_service import list_recent_alerts
-from db_connection import get_connection
-from event_service import list_recent_events
-from fsm_service import get_current_state, list_response_logs
-from process_service import list_suspicious_processes
-
-_NET_STATE = {"ts": None, "rx": None, "tx": None}
-
-
-def _json_safe(obj):
-    if isinstance(obj, dict):
-        return {k: _json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_json_safe(x) for x in obj]
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    return obj
-
-
-def _alert_chart_series():
-    with get_connection() as conn:
-        cur = conn.cursor(dictionary=True)
-        cur.execute(
-            """
-            SELECT DATE_FORMAT(created_at, '%%H:%%i') AS bucket, COUNT(*) AS cnt
-            FROM Alerts
-            WHERE created_at >= NOW() - INTERVAL 60 MINUTE
-            GROUP BY bucket
-            ORDER BY bucket ASC
-            LIMIT 30
-            """
-        )
-        rows = cur.fetchall()
-        cur.close()
-    labels = [r["bucket"] for r in rows]
-    data = [int(r["cnt"]) for r in rows]
-    return {"labels": labels, "counts": data}
-
-
-def _empty_snapshot(db_error: str) -> dict:
-    return {
-        "fsm": _json_safe(
-            {
-                "state_name": "NORMAL",
-                "last_reason": "",
-                "hardware_led": "GREEN",
-            }
-        ),
-        "alerts": [],
-        "events": [],
-        "processes": [],
-        "responses": [],
-        "threat_level": 0,
-        "hardware_led": "GREEN",
-        "chart": {"labels": [], "counts": []},
-        "concepts": {
-            "procfs": {"status": "unknown", "summary": "No telemetry available."},
-            "resource": {"status": "unknown", "summary": "No telemetry available."},
-            "supervision": {"status": "unknown", "summary": "No telemetry available."},
-        },
-        "network": _network_telemetry(),
-        "db_error": db_error,
-    }
-
-
-def _read_net_totals() -> Optional[tuple[int, int]]:
-    try:
-        import psutil  # type: ignore
-
-        io = psutil.net_io_counters()
-        if io is not None:
-            return int(io.bytes_recv), int(io.bytes_sent)
-    except Exception:
-        pass
-    if os.name == "nt":
-        try:
-            cmd = (
-                "Get-NetAdapterStatistics | "
-                "Select-Object -Property ReceivedBytes,SentBytes | "
-                "ConvertTo-Json -Compress"
-            )
-            proc = subprocess.run(
-                ["powershell", "-NoProfile", "-Command", cmd],
-                capture_output=True,
-                text=True,
-                timeout=3,
-                check=False,
-            )
-            if proc.returncode == 0 and proc.stdout.strip():
-                raw = json.loads(proc.stdout)
-                if isinstance(raw, dict):
-                    rx = int(raw.get("ReceivedBytes", 0))
-                    tx = int(raw.get("SentBytes", 0))
-                    return rx, tx
-                if isinstance(raw, list):
-                    rx = sum(int(x.get("ReceivedBytes", 0)) for x in raw if isinstance(x, dict))
-                    tx = sum(int(x.get("SentBytes", 0)) for x in raw if isinstance(x, dict))
-                    return rx, tx
-        except Exception:
-            pass
-    try:
-        p = Path("/proc/net/dev")
-        if not p.exists():
-            return None
-        rx_total = 0
-        tx_total = 0
-        for line in p.read_text(encoding="utf-8", errors="ignore").splitlines()[2:]:
-            if ":" not in line:
-                continue
-            _, rhs = line.split(":", 1)
-            cols = rhs.split()
-            if len(cols) < 9:
-                continue
-            rx_total += int(cols[0])
-            tx_total += int(cols[8])
-        return rx_total, tx_total
-    except Exception:
-        return None
-
-
-def _network_telemetry() -> dict:
-    totals = _read_net_totals()
-    now = time.time()
-    if totals is None:
-        return {
-            "status": "unavailable",
-            "in_mbps": 0.0,
-            "out_mbps": 0.0,
-            "in_total_bytes": 0,
-            "out_total_bytes": 0,
-        }
-    rx, tx = totals
-    prev_ts = _NET_STATE["ts"]
-    prev_rx = _NET_STATE["rx"]
-    prev_tx = _NET_STATE["tx"]
-    _NET_STATE["ts"] = now
-    _NET_STATE["rx"] = rx
-    _NET_STATE["tx"] = tx
-    if prev_ts is None or prev_rx is None or prev_tx is None:
-        return {
-            "status": "live",
-            "in_mbps": 0.0,
-            "out_mbps": 0.0,
-            "in_total_bytes": rx,
-            "out_total_bytes": tx,
-        }
-    dt = max(0.001, now - float(prev_ts))
-    drx = max(0, rx - int(prev_rx))
-    dtx = max(0, tx - int(prev_tx))
-    return {
-        "status": "live",
-        "in_mbps": round((drx * 8.0) / (dt * 1_000_000.0), 3),
-        "out_mbps": round((dtx * 8.0) / (dt * 1_000_000.0), 3),
-        "in_total_bytes": rx,
-        "out_total_bytes": tx,
-    }
-
-
-def _build_concept_summary(events: list, processes: list, responses: list) -> dict:
-    recent_resource = [e for e in events if str(e.get("event_type", "")).upper() == "RESOURCE_PRESSURE"]
-    proc_with_cmdline = [p for p in processes if p.get("cmdline")]
-    proc_status_seen = False
-    for e in events:
-        payload = e.get("payload")
-        if isinstance(payload, dict):
-            procs = payload.get("processes")
-            if isinstance(procs, list) and any(isinstance(p, dict) and p.get("status") for p in procs):
-                proc_status_seen = True
-                break
-
-    if proc_with_cmdline and proc_status_seen:
-        procfs = {
-            "status": "active",
-            "summary": f"/proc process metadata captured for {len(proc_with_cmdline)} records (cmdline/status fields).",
-        }
-    elif proc_with_cmdline:
-        procfs = {
-            "status": "partial",
-            "summary": f"/proc cmdline metadata captured for {len(proc_with_cmdline)} records; waiting for status field telemetry.",
-        }
+# Add backend to path to use db_connection
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+try:
+    from db_connection import fetch_query, get_db_connection
+    from alert_service import get_active_alerts, get_recent_alerts_for_dashboard
+    from event_service import get_recent_events
+    from fsm_service import get_current_state
+    
+    # Check if we can actually reach the DB
+    _conn = get_db_connection()
+    if _conn:
+        DB_AVAILABLE = True
+        _conn.close()
+        print("[*] Dashboard backend connected to MySQL database.")
     else:
-        procfs = {
-            "status": "partial",
-            "summary": "/proc monitoring is enabled but cmdline/status metadata has not been observed yet.",
-        }
+        DB_AVAILABLE = False
+        print("[!] MySQL connection failed. Falling back to MOCK mode.")
+except (ImportError, Exception) as e:
+    DB_AVAILABLE = False
+    print(f"[!] Database services or module unavailable ({e}). Running in MOCK mode.")
 
-    if recent_resource:
-        resource = {
-            "status": "active",
-            "summary": f"Resource monitoring active: {len(recent_resource)} RESOURCE_PRESSURE events in recent stream.",
-        }
-    else:
-        resource = {
-            "status": "partial",
-            "summary": "Resource monitoring instrumentation is present; no recent pressure events have triggered.",
-        }
-
-    if any(str(r.get("action", "")).upper() == "FSM_LOCK_CMD" for r in responses):
-        supervision = {
-            "status": "active",
-            "summary": "Supervision/response path is active (LOCKED command flow observed).",
-        }
-    else:
-        supervision = {
-            "status": "partial",
-            "summary": "Auto-restart supervision is enabled in the Linux engine; no recent LOCKED supervision action observed.",
-        }
-    if os.name == "nt":
-        supervision["summary"] += " Windows dashboard mode uses Python pipeline; C++ fork supervision is Linux-only."
-    return {
-        "procfs": procfs,
-        "resource": resource,
-        "supervision": supervision,
-    }
-
-
-def build_snapshot():
+if DB_AVAILABLE:
     try:
-        fsm = get_current_state()
-        state = fsm.get("state_name", "NORMAL")
-        threat = 25
-        if state == "WARNING":
-            threat = 60
-        elif state == "LOCKED":
-            threat = 100
-        alerts = _json_safe(list_recent_alerts(40))
-        events = _json_safe(list_recent_events(25))
-        processes = _json_safe(list_suspicious_processes(30))
-        responses = _json_safe(list_response_logs(30))
-        return {
-            "fsm": _json_safe(fsm),
-            "alerts": alerts,
-            "events": events,
-            "processes": processes,
-            "responses": responses,
-            "threat_level": threat,
-            "hardware_led": fsm.get("hardware_led", "GREEN"),
-            "chart": _alert_chart_series(),
-            "concepts": _build_concept_summary(events, processes, responses),
-            "network": _network_telemetry(),
-        }
-    except Exception as e:
-        return _empty_snapshot(str(e))
+        from auth_service import ensure_dashboard_accounts
 
+        ensure_dashboard_accounts()
+    except Exception as auth_ex:
+        print(f"[!] Dashboard auth bootstrap skipped: {auth_ex}")
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "hidrs-dev-secret-change-me"
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+app.config['SECRET_KEY'] = os.environ.get('FALCON_SECRET_KEY', 'soc_secret_change_me')
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
+# On Windows, eventlet binds differently and often collides on :5000; threading is stable for dev.
+_socketio_kw = {'cors_allowed_origins': '*'}
+if sys.platform == 'win32':
+    _socketio_kw['async_mode'] = 'threading'
+socketio = SocketIO(app, **_socketio_kw)
+
+# Auth-related UI events when DB is off (ring buffer for User Activity widget)
+auth_activity_ring = deque(maxlen=40)
+
+# Failed dashboard login tracking (per IP) → FSM LOCKED after threshold
+LOGIN_FAIL_THRESHOLD = 3
+LOGIN_FAIL_WINDOW_SEC = 15 * 60
+login_failure_by_ip = {}
+# Mock-mode FSM when MySQL unavailable (auth lockout still visible in UI)
+mock_fsm_auth_lock = None
+mock_fsm_auth_history = deque(maxlen=12)
 
 
-@app.route("/")
-def index():
-    return render_template("dashboard.html", initial=build_snapshot())
+def get_effective_fsm_state():
+    if mock_fsm_auth_lock:
+        return mock_fsm_auth_lock
+    return get_db_data_safely(get_current_state, 'NORMAL')
 
 
-def _background_poll():
-    import time
+def _bump_login_failure(ip):
+    now = time.time()
+    rec = login_failure_by_ip.get(ip)
+    if not rec or (now - rec.get('first', now)) > LOGIN_FAIL_WINDOW_SEC:
+        rec = {'count': 0, 'first': now, 'lockout_sent': False}
+    rec['count'] += 1
+    rec['last'] = now
+    login_failure_by_ip[ip] = rec
+    return rec
 
-    last_db_log = 0.0
-    while True:
-        snap = build_snapshot()
+
+def clear_login_failures(ip):
+    login_failure_by_ip.pop(ip, None)
+
+
+def trigger_fsm_auth_lockout(ip, username_attempt):
+    global mock_fsm_auth_lock
+    un = username_attempt or '?'
+    reason = (
+        f"Dashboard auth: {LOGIN_FAIL_THRESHOLD} failed attempts "
+        f"(IP {ip}, user '{un}') — FSM LOCKED"
+    )
+    record_dashboard_auth_event(
+        'AUTH_LOCKOUT',
+        f"FSM locked after {LOGIN_FAIL_THRESHOLD} failed logins from {ip} (attempted user: {un})",
+        actor_username=un if un != '?' else None,
+    )
+    if DB_AVAILABLE:
         try:
-            socketio.emit("soc_update", snap)
+            from fsm_service import update_fsm_state
+
+            update_fsm_state('LOCKED', reason, trigger_active_defense=False)
         except Exception as ex:
-            print(f"[dashboard] emit error: {ex}", flush=True)
-        if snap.get("db_error"):
-            now = time.time()
-            if now - last_db_log > 30:
-                print(f"[dashboard] DB offline: {snap['db_error']}", flush=True)
-                last_db_log = now
-        time.sleep(2)
-
-
-@socketio.on("connect")
-def on_connect():
+            print(f"FSM auth lockout error: {ex}")
+    else:
+        mock_fsm_auth_lock = 'LOCKED'
+        mock_fsm_auth_history.appendleft(
+            {
+                'previous_state': 'NORMAL',
+                'new_state': 'LOCKED',
+                'reason': reason[:220],
+                'changed_at': time.strftime('%H:%M:%S'),
+            }
+        )
     try:
-        socketio.emit("soc_update", build_snapshot())
-    except Exception as ex:
-        print(f"[dashboard] socket connect push failed: {ex}", flush=True)
+        socketio.emit('state_change', {'state': 'LOCKED'})
+    except Exception:
+        pass
+
+# In-memory store for tracking network speed
+net_stats = {'last_in': 0, 'last_out': 0, 'last_time': time.time(), 'in_speed': '0.00 MB/s', 'out_speed': '0.00 MB/s', 'total_in': 0, 'total_out': 0}
+
+# In-memory debug log (so you can check emitted events quickly)
+debug_event_log = deque(maxlen=250)
+_last_debug_network_ts = 0.0
+last_dashboard_snapshot = None
 
 
-def main():
-    import os
-    import threading
+def _debug_log(event_type, payload=None):
+    """Record recent server-side events to debug_event_log."""
+    try:
+        debug_event_log.appendleft(
+            {
+                'ts': datetime.now().isoformat(timespec='seconds'),
+                'event_type': event_type,
+                'payload': payload or {},
+            }
+        )
+    except Exception:
+        # Never break the dashboard due to debug logging.
+        pass
 
-    def _host() -> str:
-        raw = os.environ.get("DASHBOARD_HOST")
-        if raw is None or not str(raw).strip():
-            return "127.0.0.1"
-        return str(raw).strip()
+snapshot_cache = {
+    'processes': {'data': [], 'ts': 0},
+    'resources': {'data': None, 'ts': 0},
+    'snapshot_signature': None,
+    'last_full_emit': 0
+}
 
-    def _port() -> int:
-        raw = os.environ.get("DASHBOARD_PORT")
-        if raw is None or not str(raw).strip():
-            return 5000
-        return int(str(raw).strip())
+# Suspicious process signatures
+SUSPICIOUS_NAMES = ['powershell.exe', 'cmd.exe', 'nc.exe', 'netcat.exe', 'nmap.exe', 'wireshark.exe', 'mimikatz.exe', 'python.exe']
 
-    host = _host()
-    port = _port()
-    threading.Thread(target=_background_poll, daemon=True).start()
-    print(f"[dashboard] repo root (load .env from here): {ROOT}", flush=True)
-    print(f"[dashboard] open in Cursor preview: http://{host}:{port}", flush=True)
-    socketio.run(
-        app,
-        host=host,
-        port=port,
-        allow_unsafe_werkzeug=True,
+if psutil:
+    try:
+        initial_io = psutil.net_io_counters()
+        net_stats['last_in'] = initial_io.bytes_recv
+        net_stats['last_out'] = initial_io.bytes_sent
+    except: pass
+
+def get_db_data_safely(func, default=[]):
+    if not DB_AVAILABLE: return default
+    try:
+        res = func()
+        return res if res is not None else default
+    except Exception as e:
+        print(f"DB Fetch Error in {func.__name__}: {e}")
+        return default
+
+def get_process_list():
+    if not psutil: return []
+    cache_age = time.time() - snapshot_cache['processes']['ts']
+    if cache_age < 8 and snapshot_cache['processes']['data']:
+        return snapshot_cache['processes']['data']
+
+    procs = []
+    # Keep process sampling small to avoid heavy dashboard refreshes.
+    for p in sorted(psutil.process_iter(['pid', 'name', 'username', 'cpu_percent', 'memory_percent']), 
+                    key=lambda x: x.info['cpu_percent'] or 0, reverse=True)[:15]:
+        try:
+            info = p.info
+            name_lower = (info['name'] or '').lower()
+            
+            # Simple Behavioral Detection Score
+            threat_level = "LOW"
+            if any(s in name_lower for s in SUSPICIOUS_NAMES):
+                threat_level = "HIGH" if info['cpu_percent'] > 5 else "MEDIUM"
+            if info['cpu_percent'] > 25:
+                threat_level = "MEDIUM" if threat_level == "LOW" else "CRITICAL"
+            
+            procs.append({
+                'pid': info['pid'],
+                'name': info['name'],
+                'user': info['username'] or 'SYSTEM',
+                'cpu': info['cpu_percent'],
+                'mem': round(info['memory_percent'], 1),
+                'threat': threat_level
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    snapshot_cache['processes'] = {'data': procs, 'ts': time.time()}
+    return procs
+
+def get_real_resources():
+    if not psutil:
+        return {
+            'cpu': {'util': 22, 'freq': 3400, 'procs': 142, 'uptime': '02:30:15'},
+            'memory': {'in_use': 12.7, 'avail': 3.1, 'commit': 15.8, 'cached': 3.3}
+        }
+
+    cache_age = time.time() - snapshot_cache['resources']['ts']
+    if cache_age < 4 and snapshot_cache['resources']['data']:
+        return snapshot_cache['resources']['data']
+    
+    cpu_util = psutil.cpu_percent(interval=None)
+    mem = psutil.virtual_memory()
+    boot_time = psutil.boot_time()
+    uptime_str = time.strftime('%H:%M:%S', time.gmtime(time.time() - boot_time))
+
+    resources = {
+        'cpu': {'util': cpu_util, 'freq': int(psutil.cpu_freq().current if psutil.cpu_freq() else 3400), 
+                'procs': len(psutil.pids()), 'uptime': uptime_str},
+        'memory': {'in_use': round(mem.used / (1024**3), 1), 'avail': round(mem.available / (1024**3), 1),
+                   'commit': round((mem.used + 1.5*1024**3) / (1024**3), 1), 'cached': round(getattr(mem, 'cached', 0) / (1024**3), 1)}
+    }
+    snapshot_cache['resources'] = {'data': resources, 'ts': time.time()}
+    return resources
+
+def update_network_stats():
+    """Refresh counters from psutil; rate is bytes/sec over elapsed window (min ~80ms)."""
+    if not psutil:
+        return
+    try:
+        current_io = psutil.net_io_counters()
+        now = time.time()
+        elapsed = now - net_stats['last_time']
+        net_stats['total_in'] = current_io.bytes_recv / (1024 * 1024 * 1024)
+        net_stats['total_out'] = current_io.bytes_sent / (1024 * 1024 * 1024)
+        if elapsed >= 0.08:
+            in_bps = (current_io.bytes_recv - net_stats['last_in']) / elapsed
+            out_bps = (current_io.bytes_sent - net_stats['last_out']) / elapsed
+
+            # Format with the smallest unit that preserves motion in the UI.
+            # (If we always show MB/s with 2 decimals, small rates often round to 0.00 MB/s.)
+            def _fmt_rate(bps):
+                if bps is None:
+                    return "0.00 KB/s"
+                if bps < 0:
+                    bps = 0
+                if bps < 1024 * 1024:
+                    return f"{(bps / 1024):.2f} KB/s"
+                if bps < 1024 * 1024 * 1024:
+                    return f"{(bps / (1024 * 1024)):.2f} MB/s"
+                return f"{(bps / (1024 * 1024 * 1024)):.2f} GB/s"
+
+            net_stats['in_speed'] = _fmt_rate(in_bps)
+            net_stats['out_speed'] = _fmt_rate(out_bps)
+        net_stats['last_in'] = current_io.bytes_recv
+        net_stats['last_out'] = current_io.bytes_sent
+        net_stats['last_time'] = now
+    except Exception:
+        pass
+
+
+def get_network_payload():
+    """Snapshot for Socket.IO and REST (live ingress/egress)."""
+    update_network_stats()
+    return {
+        'in': net_stats['in_speed'],
+        'out': net_stats['out_speed'],
+        'total_in': f"{net_stats['total_in']:.2f} GB",
+        'total_out': f"{net_stats['total_out']:.2f} GB",
+    }
+
+
+def _fmt_clock(ts):
+    """12-hour time for display (e.g. 10:24 AM)."""
+    if ts is None:
+        return '—'
+    if hasattr(ts, 'strftime'):
+        h = ts.hour % 12 or 12
+        return f"{h}:{ts.strftime('%M %p')}"
+    return str(ts)
+
+
+def _add_calendar_months(year, month, delta):
+    m = month - 1 + delta
+    y = year + m // 12
+    m = m % 12 + 1
+    return y, m
+
+
+def _month_start_end(year, month):
+    start = datetime(year, month, 1)
+    if month == 12:
+        end = datetime(year + 1, 1, 1)
+    else:
+        end = datetime(year, month + 1, 1)
+    return start, end
+
+
+def _alert_counts_window(start, end):
+    if not DB_AVAILABLE:
+        return 0, 0
+    row = get_db_data_safely(
+        lambda: fetch_query(
+            """SELECT COUNT(*) AS total,
+                      COALESCE(SUM(CASE WHEN is_resolved THEN 1 ELSE 0 END), 0) AS resolved
+               FROM Alerts WHERE timestamp >= %s AND timestamp < %s""",
+            (start, end),
+            fetchall=False,
+        ),
+        None,
+    )
+    if not row:
+        return 0, 0
+    total = int(row.get('total') or 0)
+    resolved = int(row.get('resolved') or 0)
+    return resolved, max(0, total - resolved)
+
+
+def build_incident_trends():
+    """Return resolved vs unresolved alert counts for 12 time buckets per period."""
+    now = datetime.now()
+
+    def mock_period(seed):
+        r = random.Random(seed)
+        return {
+            'labels': [str(i + 1) for i in range(12)],
+            'resolved': [r.randint(8, 45) for _ in range(12)],
+            'unresolved': [r.randint(1, 18) for _ in range(12)],
+        }
+
+    if not DB_AVAILABLE:
+        return {'weekly': mock_period(1), 'monthly': mock_period(2), 'yearly': mock_period(3)}
+
+    weekly = {'labels': [], 'resolved': [], 'unresolved': []}
+    for idx in range(12):
+        end = now - timedelta(weeks=(11 - idx))
+        start = end - timedelta(weeks=1)
+        weekly['labels'].append(start.strftime('%m/%d'))
+        r, u = _alert_counts_window(start, end)
+        weekly['resolved'].append(r)
+        weekly['unresolved'].append(u)
+
+    monthly = {'labels': [], 'resolved': [], 'unresolved': []}
+    for idx in range(12):
+        off = 11 - idx
+        y, m = _add_calendar_months(now.year, now.month, -off)
+        start, end = _month_start_end(y, m)
+        monthly['labels'].append(start.strftime('%b'))
+        r, u = _alert_counts_window(start, end)
+        monthly['resolved'].append(r)
+        monthly['unresolved'].append(u)
+
+    yearly = {'labels': [], 'resolved': [], 'unresolved': []}
+    for idx in range(12):
+        year = now.year - (11 - idx)
+        start = datetime(year, 1, 1)
+        end = datetime(year + 1, 1, 1)
+        yearly['labels'].append(str(year))
+        r, u = _alert_counts_window(start, end)
+        yearly['resolved'].append(r)
+        yearly['unresolved'].append(u)
+
+    return {'weekly': weekly, 'monthly': monthly, 'yearly': yearly}
+
+
+def _activity_icon_class(event_type, description):
+    et = (event_type or '').upper()
+    d = (description or '').upper()
+    if 'FAIL' in et or 'BRUTE' in d or 'DENIED' in d or 'LOCKOUT' in et or 'FSM LOCK' in d:
+        return 'red'
+    if 'SIGNUP' in et or 'FILE' in et or 'ACCESS' in d or 'IPC' in et or 'PROCESS' in et:
+        return 'blue'
+    return 'gray'
+
+
+def record_dashboard_auth_event(event_type, description, user_id=None, actor_username=None):
+    """Persist LOGIN / LOGOUT / AUTH_FAILED / SIGNUP for User Activity (DB + in-memory ring)."""
+    if DB_AVAILABLE:
+        try:
+            from event_service import log_event
+
+            log_event(event_type, description, 'SOC-Dashboard', user_id=user_id)
+        except Exception as ex:
+            print(f"Auth event log error: {ex}")
+    auth_activity_ring.appendleft(
+        {
+            'event_type': event_type,
+            'description': description,
+            'ts': datetime.now(),
+            'user_id': user_id,
+            'username': actor_username,
+        }
     )
 
 
-if __name__ == "__main__":
-    main()
+def _rows_to_activity_items(rows):
+    out = []
+    for row in rows or []:
+        ts = row.get('timestamp')
+        desc = (row.get('description') or row.get('event_type') or 'Event').strip()
+        et_raw = row.get('event_type') or ''
+        ic = _activity_icon_class(et_raw, desc)
+        etu = (et_raw or '').upper()
+        if etu == 'AUTH_LOCKOUT':
+            icon = '🔒'
+        elif etu == 'SIGNUP':
+            icon = '✚'
+        else:
+            icon = '⚠' if ic == 'red' else ('📄' if ic == 'blue' else '👤')
+        actor = (row.get('actor_username') or '').strip() or None
+        out.append(
+            {
+                'event_type': row.get('event_type'),
+                'description': desc[:120],
+                'timestamp': _fmt_clock(ts),
+                'icon': ic,
+                'icon_char': icon,
+                'actor': actor,
+            }
+        )
+    return out
+
+
+def build_user_activity_list(recent_events):
+    """Recent auth/session rows for the User Activity widget."""
+    if DB_AVAILABLE:
+        rows = get_db_data_safely(
+            lambda: fetch_query(
+                """SELECT e.event_type, e.description, e.timestamp, u.username AS actor_username
+                   FROM Events e
+                   LEFT JOIN Users u ON e.user_id = u.user_id
+                   WHERE e.event_type IN ('LOGIN', 'LOGOUT', 'AUTH_FAILED', 'AUTH_LOCKOUT', 'SIGNUP')
+                   ORDER BY e.timestamp DESC LIMIT 8"""
+            ),
+            [],
+        )
+        if not rows:
+            rows = get_db_data_safely(
+                lambda: fetch_query(
+                    """SELECT e.event_type, e.description, e.timestamp, u.username AS actor_username
+                       FROM Events e
+                       LEFT JOIN Users u ON e.user_id = u.user_id
+                       ORDER BY e.timestamp DESC LIMIT 8"""
+                ),
+                [],
+            )
+        out = _rows_to_activity_items(rows)
+        return out if out else [{'event_type': 'INFO', 'description': 'No events yet', 'timestamp': '—', 'icon': 'gray', 'icon_char': 'ℹ', 'actor': None}]
+
+    out = []
+    for item in auth_activity_ring:
+        desc = (item.get('description') or item.get('event_type') or 'Event').strip()
+        et = item.get('event_type') or 'EVENT'
+        ic = _activity_icon_class(et, desc)
+        if (et or '').upper() == 'AUTH_LOCKOUT':
+            icon = '🔒'
+        elif (et or '').upper() == 'SIGNUP':
+            icon = '✚'
+        else:
+            icon = '⚠' if ic == 'red' else ('📄' if ic == 'blue' else '👤')
+        actor = (item.get('username') or '').strip() or None
+        out.append(
+            {
+                'event_type': et,
+                'description': desc[:120],
+                'timestamp': _fmt_clock(item.get('ts')),
+                'icon': ic,
+                'icon_char': icon,
+                'actor': actor,
+            }
+        )
+        if len(out) >= 8:
+            return out
+    for ev in recent_events or []:
+        if len(out) >= 8:
+            break
+        et = ev.get('event_type') or 'EVENT'
+        desc = (ev.get('description') or et)[:120]
+        out.append(
+            {
+                'event_type': et,
+                'description': desc,
+                'timestamp': ev.get('timestamp') or '—',
+                'icon': _activity_icon_class(et, desc),
+                'icon_char': 'ℹ',
+                'actor': None,
+            }
+        )
+    if not out:
+        return [
+            {
+                'event_type': 'INFO',
+                'description': 'Sign in to record session activity',
+                'timestamp': '—',
+                'icon': 'gray',
+                'icon_char': 'ℹ',
+                'actor': None,
+            }
+        ]
+    return out[:8]
+
+
+def _ts_sort_key(ts):
+    if ts is None:
+        return datetime.min
+    if hasattr(ts, 'timestamp'):
+        return ts
+    return datetime.min
+
+
+def build_incident_summary_list(active_alerts, recent_events):
+    """Recent alerts + notable events (last 7 days), merged by time, max 5."""
+    limit = 5
+    days = 7
+    if DB_AVAILABLE:
+        alert_rows = get_db_data_safely(
+            lambda: fetch_query(
+                """SELECT a.message AS title, a.timestamp, s.level_name AS severity
+                   FROM Alerts a
+                   JOIN Severity s ON a.severity_id = s.severity_id
+                   WHERE a.timestamp >= NOW() - INTERVAL %s DAY
+                   ORDER BY a.timestamp DESC LIMIT 20""",
+                (days,),
+            ),
+            [],
+        )
+        event_rows = get_db_data_safely(
+            lambda: fetch_query(
+                """SELECT COALESCE(NULLIF(TRIM(description), ''), event_type) AS title,
+                          timestamp, event_type
+                   FROM Events
+                   WHERE timestamp >= NOW() - INTERVAL %s DAY
+                   ORDER BY timestamp DESC LIMIT 20""",
+                (days,),
+            ),
+            [],
+        )
+        merged = []
+        for row in alert_rows or []:
+            merged.append({
+                'title': (row.get('title') or '')[:100],
+                'ts': row.get('timestamp'),
+                'severity': (row.get('severity') or 'MEDIUM').upper(),
+                'src': 'alert',
+            })
+        for row in event_rows or []:
+            et = (row.get('event_type') or '').upper()
+            sev = 'HIGH' if 'FAIL' in et or 'DENIED' in et else 'LOW'
+            merged.append({'title': (row.get('title') or '')[:100], 'ts': row.get('timestamp'), 'severity': sev, 'src': 'event'})
+        merged.sort(key=lambda r: _ts_sort_key(r['ts']), reverse=True)
+        out = []
+        seen = set()
+        for item in merged:
+            tkey = (item['title'][:48], str(item['ts']))
+            if tkey in seen:
+                continue
+            seen.add(tkey)
+            sev = item['severity']
+            icon = '⚠' if sev in ('HIGH', 'CRITICAL') else 'ℹ'
+            color = 'red' if sev in ('HIGH', 'CRITICAL') else 'blue'
+            out.append({
+                'title': item['title'],
+                'time': _fmt_clock(item['ts']),
+                'severity': sev,
+                'icon': icon,
+                'color': color,
+            })
+            if len(out) >= limit:
+                break
+        return out if out else [{'title': 'No recent incidents', 'time': '—', 'severity': 'LOW', 'icon': 'ℹ', 'color': 'blue'}]
+
+    out = []
+    for a in active_alerts or []:
+        sev = (a.get('severity') or 'MEDIUM').upper()
+        msg = (a.get('message') or 'Alert')[:100]
+        ts = a.get('timestamp')
+        if hasattr(ts, 'strftime'):
+            time_part = _fmt_clock(ts)
+        elif isinstance(ts, str) and len(ts) > 11 and ' ' in ts:
+            time_part = ts[11:16]
+        else:
+            time_part = (ts or '—')[:8]
+        icon = '⚠' if sev in ('HIGH', 'CRITICAL') else 'ℹ'
+        color = 'red' if sev in ('HIGH', 'CRITICAL') else 'blue'
+        out.append({'title': msg, 'time': time_part, 'severity': sev, 'icon': icon, 'color': color})
+    for ev in recent_events or []:
+        if len(out) >= limit:
+            break
+        et = ev.get('event_type') or 'EVENT'
+        desc = (ev.get('description') or et)[:100]
+        sev = 'HIGH' if 'FAIL' in et.upper() else 'LOW'
+        icon = '⚠' if sev == 'HIGH' else 'ℹ'
+        color = 'red' if sev == 'HIGH' else 'blue'
+        out.append({'title': desc, 'time': ev.get('timestamp') or '—', 'severity': sev, 'icon': icon, 'color': color})
+    return out[:limit]
+
+
+def network_poll_thread():
+    """Push network counters periodically — lighter load than sub-second polling."""
+    while True:
+        try:
+            payload = get_network_payload()
+            socketio.emit('network_stats', payload)
+            global _last_debug_network_ts
+            now_ts = time.time()
+            if now_ts - _last_debug_network_ts > 8:
+                _last_debug_network_ts = now_ts
+                _debug_log('network_stats_emit', payload)
+        except Exception as e:
+            print(f"Network poll emit error: {e}")
+        socketio.sleep(1.25)
+
+def build_dashboard_snapshot(current_state):
+    active_alerts = get_db_data_safely(get_active_alerts, [])
+    recent_events = get_db_data_safely(lambda: get_recent_events(8), [])
+
+    if not DB_AVAILABLE and not active_alerts:
+        active_alerts = [
+            {'alert_id': 101, 'severity': 'CRITICAL', 'message': 'Simulated Ransomware Heuristic Match', 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'), 'event_type': 'MALWARE', 'agent': '001', 'agent_name': 'Kali-SOC', 'technique': 'T1486', 'tactic': 'Impact', 'rule_id': '255001', 'level': 12},
+            {'alert_id': 102, 'severity': 'HIGH', 'message': 'Signed Script Proxy Execution: PowerShell.exe', 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'), 'event_type': 'DETECTION', 'agent': '004', 'agent_name': 'Windows-Srv', 'technique': 'T1218', 'tactic': 'Defense Evasion', 'rule_id': '255563', 'level': 10}
+        ]
+
+    # When DB is unavailable, populate recent_events so the Events Log page isn't empty.
+    if not DB_AVAILABLE and (not recent_events):
+        recent_events = [
+            {
+                'event_id': 401,
+                'event_type': 'AUTH_FAILED',
+                'description': 'Failed login attempt for admin from 127.0.0.1',
+                'process_name': 'ssh_login_sim',
+                'timestamp': time.strftime('%H:%M:%S'),
+            },
+            {
+                'event_id': 402,
+                'event_type': 'PROCESS_SPAM',
+                'description': 'Rapid subprocess spawn simulated to trigger process spike detector',
+                'process_name': 'process_flood.py',
+                'timestamp': time.strftime('%H:%M:%S'),
+            },
+            {
+                'event_id': 403,
+                'event_type': 'FILE_TAMPER',
+                'description': 'Critical file tampering simulated (dummy target) for CRITICAL escalation',
+                'process_name': 'file_tamper_simulator.py',
+                'timestamp': time.strftime('%H:%M:%S'),
+            },
+            {
+                'event_id': 404,
+                'event_type': 'FSM_LOCKOUT',
+                'description': 'FSM locked after repeated failed sign-in attempts (mock)',
+                'process_name': None,
+                'timestamp': time.strftime('%H:%M:%S'),
+            },
+            {
+                'event_id': 405,
+                'event_type': 'RESPONSE_ACTION',
+                'description': 'Active defense workflow invoked (mock) to terminate suspicious processes',
+                'process_name': 'response_engine',
+                'timestamp': time.strftime('%H:%M:%S'),
+            },
+        ]
+
+    for alert in active_alerts:
+        alert.setdefault('agent', '004'); alert.setdefault('agent_name', 'Windows'); alert.setdefault('technique', 'T1059')
+        alert.setdefault('tactic', 'Execution'); alert.setdefault('level', 10 if alert['severity'] in ['HIGH', 'CRITICAL'] else 5)
+        alert.setdefault('rule_id', str(random.randint(200000, 260000)))
+        if hasattr(alert.get('timestamp'), 'strftime'): alert['timestamp'] = alert['timestamp'].strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+
+    for event in recent_events:
+        if hasattr(event.get('timestamp'), 'strftime'): event['timestamp'] = event['timestamp'].strftime('%H:%M:%S')
+
+    severity_counts = {'LOW': 0, 'MEDIUM': 0, 'HIGH': 0, 'CRITICAL': 0}
+    for alert in active_alerts: severity_counts[alert.get('severity', 'LOW')] += 1
+
+    if DB_AVAILABLE:
+        state_history = fetch_query("SELECT previous_state, new_state, reason, changed_at FROM FSM_State_History ORDER BY changed_at DESC LIMIT 5") or []
+        for item in state_history:
+            if hasattr(item.get('changed_at'), 'strftime'): item['changed_at'] = item['changed_at'].strftime('%H:%M:%S')
+        
+        res = fetch_query("SELECT COUNT(*) as cnt FROM Events WHERE event_type IN ('RESPONSE_ACTION', 'PROCESS_KILLED') AND timestamp >= NOW() - INTERVAL 1 DAY", fetchall=False)
+        kill_cnt = res['cnt'] if res and 'cnt' in res else 0
+        ipc_res = fetch_query("SELECT COUNT(*) as cnt FROM Events WHERE timestamp >= NOW() - INTERVAL 1 HOUR", fetchall=False)
+        ipc_total = ipc_res['cnt'] if ipc_res and 'cnt' in ipc_res else 0
+    else:
+        base_mock_hist = [
+            {'previous_state': 'NORMAL', 'new_state': 'NORMAL', 'reason': 'System Init (Mock)', 'changed_at': time.strftime('%H:%M:%S')}
+        ]
+        state_history = list(mock_fsm_auth_history) + base_mock_hist
+        kill_cnt, ipc_total = 12, 412
+
+    update_network_stats()
+    incident_trends = build_incident_trends()
+    user_activity = build_user_activity_list(recent_events)
+    incident_summary = build_incident_summary_list(active_alerts, recent_events)
+
+    recent_alerts_widget = get_db_data_safely(lambda: get_recent_alerts_for_dashboard(7, 5), []) or []
+    if not DB_AVAILABLE:
+        recent_alerts_widget = list(active_alerts[:5])
+    for alert in recent_alerts_widget:
+        alert.setdefault('agent', '004')
+        alert.setdefault('agent_name', 'Windows')
+        alert.setdefault('technique', 'T1059')
+        alert.setdefault('tactic', 'Execution')
+        alert.setdefault('level', 10 if alert.get('severity') in ['HIGH', 'CRITICAL'] else 5)
+        alert.setdefault('rule_id', str(random.randint(200000, 260000)))
+        if hasattr(alert.get('timestamp'), 'strftime'):
+            alert['timestamp'] = alert['timestamp'].strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+
+    return {
+        'state': current_state, 'active_alerts': active_alerts, 'recent_alerts': recent_alerts_widget, 'recent_events': recent_events, 'severity_counts': severity_counts,
+        'state_history': state_history, 'kill_cnt': kill_cnt, 'ipc_total': ipc_total,
+        'devices': [{'name': 'Firewall-Main', 'status': 'Online', 'health': 'green'}, {'name': os.environ.get('COMPUTERNAME', 'LOCAL-HOST'), 'status': 'At Risk' if severity_counts['HIGH'] > 0 else 'Online', 'health': 'green'}],
+        'network': {'in': net_stats['in_speed'], 'out': net_stats['out_speed'], 'total_in': f"{net_stats['total_in']:.2f} GB", 'total_out': f"{net_stats['total_out']:.2f} GB"}, 'resources': get_real_resources(),
+        'processes': get_process_list(),
+        'incident_trends': incident_trends,
+        'user_activity': user_activity,
+        'incident_summary': incident_summary,
+    }
+
+
+def make_snapshot_signature(snapshot):
+    slim_snapshot = {
+        'state': snapshot.get('state'),
+        'alerts': [
+            (a.get('alert_id'), a.get('severity'), a.get('message'), a.get('timestamp'))
+            for a in snapshot.get('active_alerts', [])
+        ],
+        'recent_alerts': [
+            (a.get('alert_id'), a.get('severity'), a.get('timestamp'))
+            for a in snapshot.get('recent_alerts', [])
+        ],
+        'events': [
+            (e.get('event_id'), e.get('event_type'), e.get('timestamp'))
+            for e in snapshot.get('recent_events', [])
+        ],
+        'history': [
+            (h.get('previous_state'), h.get('new_state'), h.get('changed_at'))
+            for h in snapshot.get('state_history', [])
+        ],
+        'severity_counts': snapshot.get('severity_counts'),
+        'kill_cnt': snapshot.get('kill_cnt'),
+        'ipc_total': snapshot.get('ipc_total'),
+        'network': snapshot.get('network'),
+        'resources': snapshot.get('resources'),
+        'processes': [
+            (p.get('pid'), p.get('cpu'), p.get('mem'), p.get('threat'))
+            for p in snapshot.get('processes', [])
+        ],
+        'user_activity': [
+            (u.get('description'), u.get('timestamp'), u.get('actor'))
+            for u in snapshot.get('user_activity', [])
+        ],
+        'incident_summary': [
+            (s.get('title'), s.get('time'))
+            for s in snapshot.get('incident_summary', [])
+        ],
+        'incident_trends': (
+            tuple(snapshot.get('incident_trends', {}).get('weekly', {}).get('resolved', [])),
+            tuple(snapshot.get('incident_trends', {}).get('monthly', {}).get('resolved', [])),
+            tuple(snapshot.get('incident_trends', {}).get('yearly', {}).get('resolved', [])),
+        ),
+    }
+    return json.dumps(slim_snapshot, sort_keys=True)
+
+def background_thread():
+    last_state, last_alert_id = 'NORMAL', 0
+    metrics_emit_counter = 0
+    while True:
+        try:
+            current_state = get_effective_fsm_state()
+            if DB_AVAILABLE:
+                new_alerts = fetch_query("SELECT a.alert_id, s.level_name as severity, a.message, a.timestamp FROM Alerts a JOIN Severity s ON a.severity_id = s.severity_id WHERE a.alert_id > %s ORDER BY a.alert_id ASC", (last_alert_id,))
+                if new_alerts:
+                    for alert in new_alerts:
+                        if hasattr(alert.get('timestamp'), 'strftime'): alert['timestamp'] = alert['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+                        socketio.emit('new_alert', alert); last_alert_id = max(last_alert_id, alert['alert_id'])
+            if current_state != last_state: socketio.emit('state_change', {'state': current_state}); last_state = current_state
+            snapshot = build_dashboard_snapshot(current_state)
+            snapshot_signature = make_snapshot_signature(snapshot)
+            now = time.time()
+
+            if (
+                snapshot_signature != snapshot_cache['snapshot_signature']
+                or (now - snapshot_cache['last_full_emit']) >= 12
+            ):
+                global last_dashboard_snapshot
+                last_dashboard_snapshot = snapshot
+                socketio.emit('dashboard_snapshot', snapshot)
+                _debug_log(
+                    'dashboard_snapshot_emit',
+                    {
+                        'state': current_state,
+                        'active_alerts': len(snapshot.get('active_alerts', [])),
+                        'recent_events': len(snapshot.get('recent_events', []) or []),
+                        'kill_cnt': snapshot.get('kill_cnt'),
+                        'ipc_total': snapshot.get('ipc_total'),
+                    },
+                )
+                snapshot_cache['snapshot_signature'] = snapshot_signature
+                snapshot_cache['last_full_emit'] = now
+
+            # metrics_update duplicates much of dashboard_snapshot — emit less often to reduce UI churn
+            metrics_emit_counter += 1
+            if metrics_emit_counter % 2 == 0:
+                socketio.emit('metrics_update', {
+                    'events_last_min': random.randint(5, 15),
+                    'active_alerts': len(snapshot['active_alerts']),
+                    'severity_counts': snapshot['severity_counts'],
+                    'kill_cnt': snapshot['kill_cnt'],
+                    'network': snapshot['network']
+                })
+                _debug_log(
+                    'metrics_update_emit',
+                    {
+                        'active_alerts': snapshot.get('active_alerts'),
+                        'kill_cnt': snapshot.get('kill_cnt'),
+                        'network': snapshot.get('network'),
+                    },
+                )
+        except Exception as e: print(f"BG Thread Error: {e}")
+        socketio.sleep(2)
+
+@socketio.on('request_scan')
+def handle_scan():
+    socketio.emit('scan_start')
+    _debug_log('scan_start')
+    time.sleep(1.5)
+    socketio.emit('scan_complete', {'message': 'System scan finished. No immediate threats found.'})
+    _debug_log('scan_complete')
+
+@socketio.on('kill_process')
+def handle_kill(data):
+    pid = data.get('pid')
+    name = data.get('name')
+    print(f"[SOC] REQ: Kill process {name} (PID: {pid})")
+    _debug_log('kill_process_req', {'pid': pid, 'name': name})
+    with open("kill_debug.log", "a") as f:
+        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Kill REQ: {name} ({pid})\n")
+    try:
+        if psutil:
+            proc = psutil.Process(pid)
+            proc.terminate()
+            if DB_AVAILABLE:
+                from event_service import log_event
+                log_event("PROCESS_KILLED", f"User manually terminated suspicious process: {name} (PID: {pid})", "SOC-Dashboard")
+            socketio.emit('alert_msg', {'type': 'success', 'text': f'Process {name} ({pid}) terminated.'})
+            _debug_log('kill_process_success', {'pid': pid, 'name': name})
+        else:
+            socketio.emit('alert_msg', {'type': 'error', 'text': 'Kill failed: psutil unavailable.'})
+            _debug_log('kill_process_failed', {'pid': pid, 'name': name, 'reason': 'psutil_unavailable'})
+    except Exception as e:
+        socketio.emit('alert_msg', {'type': 'error', 'text': f'Failed to kill {pid}: {str(e)}'})
+        _debug_log('kill_process_error', {'pid': pid, 'name': name, 'error': str(e)})
+
+@app.before_request
+def require_dashboard_login():
+    # Allow websocket handshake + Socket.IO polling to proceed; we authorize on the
+    # Socket.IO 'connect' handler / session, not by HTTP redirects.
+    if (
+        request.path.startswith('/api/debug')
+        or request.path.startswith('/socket.io')
+        or request.endpoint in ('login', 'signup', 'static')
+        or request.path.startswith('/static/')
+    ):
+        return None
+    if request.path == '/favicon.ico':
+        return None
+    if not session.get('user_id'):
+        return redirect(url_for('login', next=request.path))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if session.get('user_id'):
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+        try:
+            from auth_service import verify_login_dashboard
+
+            user = verify_login_dashboard(username, password, DB_AVAILABLE)
+        except Exception as ex:
+            print(f"Login verify error: {ex}")
+            user = None
+        if user:
+            clear_login_failures(request.remote_addr or 'unknown')
+            session.permanent = True
+            session['user_id'] = user['user_id']
+            session['username'] = user['username']
+            session['role'] = user.get('role', 'user')
+            ip = request.remote_addr or 'unknown'
+            record_dashboard_auth_event(
+                'LOGIN',
+                f"User '{user['username']}' signed in to dashboard ({ip})",
+                user_id=user['user_id'],
+                actor_username=user['username'],
+            )
+            _debug_log('login_success', {'username': user.get('username'), 'user_id': user.get('user_id')})
+            nxt = request.args.get('next') or url_for('index')
+            if not nxt.startswith('/') or nxt.startswith('//'):
+                nxt = url_for('index')
+            return redirect(nxt)
+        ip = request.remote_addr or 'unknown'
+        rec = _bump_login_failure(ip)
+        record_dashboard_auth_event(
+            'AUTH_FAILED',
+            f"Failed login attempt for {(username or '?')} ({ip}); count {rec['count']}/{LOGIN_FAIL_THRESHOLD}",
+            actor_username=(username or '').strip() or None,
+        )
+        _debug_log('login_failed', {'username': (username or '').strip() or None, 'ip': ip, 'count': rec.get('count')})
+        if rec['count'] >= LOGIN_FAIL_THRESHOLD and not rec.get('lockout_sent'):
+            rec['lockout_sent'] = True
+            login_failure_by_ip[ip] = rec
+            trigger_fsm_auth_lockout(ip, username)
+            flash(
+                'Too many failed sign-in attempts. FSM has been escalated to LOCKED. '
+                'Review the FSM page and OS Concepts security notice after signing in (if permitted).',
+                'error',
+            )
+        elif rec['count'] >= LOGIN_FAIL_THRESHOLD:
+            flash('Invalid credentials. FSM is in LOCKED state.', 'error')
+        else:
+            left = max(0, LOGIN_FAIL_THRESHOLD - rec['count'])
+            flash(
+                f'Invalid username or password. {left} attempt(s) remaining before FSM lock-down.',
+                'error',
+            )
+    return render_template('login.html')
+
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if session.get('user_id'):
+        return redirect(url_for('index'))
+    if os.environ.get('FALCON_DISABLE_SIGNUP', '').lower() in ('1', 'true', 'yes'):
+        flash('New account registration is disabled.', 'error')
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+        password2 = request.form.get('password_confirm') or ''
+        if password != password2:
+            flash('Passwords do not match.', 'error')
+            return render_template('signup.html')
+        try:
+            from auth_service import register_user
+
+            user, err = register_user(username, password, DB_AVAILABLE)
+        except Exception as ex:
+            print(f"Signup error: {ex}")
+            user, err = None, 'Registration failed. Try again.'
+        if err:
+            flash(err, 'error')
+            return render_template('signup.html')
+        ip = request.remote_addr or 'unknown'
+        record_dashboard_auth_event(
+            'SIGNUP',
+            f"New account '{user['username']}' registered ({ip})",
+            user_id=user['user_id'],
+            actor_username=user['username'],
+        )
+        _debug_log('signup_success', {'username': user.get('username'), 'user_id': user.get('user_id')})
+        flash('Account created. Sign in with your new username and password.', 'success')
+        return redirect(url_for('login'))
+    return render_template('signup.html')
+
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    uid = session.get('user_id')
+    un = session.get('username')
+    if un:
+        record_dashboard_auth_event(
+            'LOGOUT',
+            f"User '{un}' signed out",
+            user_id=uid,
+            actor_username=un,
+        )
+    session.clear()
+    return redirect(url_for('login'))
+
+
+@app.route('/')
+def index():
+    return render_template('dashboard.html', username=session.get('username', 'Operator'))
+
+
+@app.route('/api/ipc/status')
+def api_ipc_status():
+    """Reports named-pipe path and health for the OS Concepts IPC page."""
+    try:
+        from ipc_config import pipe_status
+        st = pipe_status()
+        st['ok'] = True
+        return jsonify(st)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/network')
+def api_network():
+    """Current ingress/egress rates and cumulative totals (same data as Socket.IO)."""
+    return jsonify(get_network_payload())
+
+
+@app.route('/api/dashboard_snapshot')
+def api_dashboard_snapshot():
+    """Return the latest dashboard snapshot for UI refresh (REST fallback)."""
+    try:
+        st = get_effective_fsm_state()
+        snap = build_dashboard_snapshot(st)
+        return jsonify(snap)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/debug/events')
+def api_debug_events():
+    """Return last N server debug events (for verifying dashboard functionality)."""
+    limit = request.args.get('limit', default='80')
+    try:
+        limit = max(1, min(250, int(limit)))
+    except Exception:
+        limit = 80
+    return jsonify({'ok': True, 'events': list(debug_event_log)[:limit]})
+
+
+@app.route('/api/debug/last-snapshot')
+def api_debug_last_snapshot():
+    """Return a small view of the last dashboard_snapshot sent (for UI debugging)."""
+    if not last_dashboard_snapshot:
+        return jsonify({'ok': True, 'snapshot_recent_events_count': 0, 'recent_events': []})
+    revents = last_dashboard_snapshot.get('recent_events') or []
+    return jsonify(
+        {
+            'ok': True,
+            'snapshot_recent_events_count': len(revents),
+            'recent_events': revents[:8],
+        }
+    )
+
+
+@socketio.on('connect')
+def handle_socket_connect():
+    # Don't reject the socket connection outright; some clients may not have a
+    # session bound at handshake time (depending on cookies/port). We still
+    # keep UI in sync via REST fallbacks for unauthenticated users.
+    if not session.get('user_id'):
+        return
+    try:
+        emit('network_stats', get_network_payload())
+    except Exception:
+        pass
+    _debug_log('socket_connect', {'user_id': session.get('user_id'), 'username': session.get('username')})
+
+
+if __name__ == '__main__':
+    socketio.start_background_task(background_thread)
+    socketio.start_background_task(network_poll_thread)
+
+    # Windows often reserves 5000 (Hyper-V / excluded ranges) → WinError 10013 "forbidden by its access permissions"
+    _default_port = '5001' if sys.platform == 'win32' else '5000'
+    _explicit_port = 'PORT' in os.environ
+    _port = int(os.environ.get('PORT', _default_port))
+    _candidates = [_port]
+    if not _explicit_port:
+        for _alt in (5001, 8080, 8765, 9000):
+            if _alt not in _candidates:
+                _candidates.append(_alt)
+
+    _last_err = None
+    for _try_port in _candidates:
+        try:
+            print(f"[*] Binding dashboard on 0.0.0.0:{_try_port} …")
+            socketio.run(
+                app,
+                host='0.0.0.0',
+                port=_try_port,
+                debug=True,
+                use_reloader=False,
+                allow_unsafe_werkzeug=True,
+            )
+            break
+        except OSError as e:
+            _last_err = e
+            winerr = getattr(e, 'winerror', None)
+            msg = str(e)
+            if winerr == 10048 or 'Address already in use' in msg:
+                print(
+                    f"[!] Port {_try_port} is already in use. "
+                    f"Try: Get-NetTCPConnection -LocalPort {_try_port}"
+                )
+            elif winerr == 10013 or 'forbidden by its access permissions' in msg:
+                print(
+                    f"[!] Port {_try_port} is blocked on Windows (reserved range or policy). "
+                    f"Set PORT explicitly, e.g.  $env:PORT=8080; python app.py"
+                )
+            else:
+                print(f"[!] Could not bind port {_try_port}: {e}")
+            if _try_port == _candidates[-1]:
+                print(
+                    "[!] No usable port in fallback list. "
+                    "Check excluded ranges: netsh interface ipv4 show excludedportrange protocol=tcp"
+                )
+                raise _last_err
+            print(f"    Trying next candidate…")

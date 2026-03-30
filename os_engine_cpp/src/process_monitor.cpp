@@ -1,160 +1,142 @@
 #include "process_monitor.h"
-
-#include "event_writer.h"
-
+#include <iostream>
 #include <dirent.h>
-#include <unistd.h>
-
-#include <chrono>
-#include <cstdlib>
 #include <fstream>
 #include <sstream>
-#include <string>
-#include <thread>
-#include <vector>
+#include <unistd.h>
+#include <pthread.h>
+#include <cstring>
+#include <algorithm>
 
-namespace {
+// 3️⃣ Synchronization — Global mutex shared across threads
+pthread_mutex_t proc_mut = PTHREAD_MUTEX_INITIALIZER;
 
-bool isDigits(const std::string& s) {
-    if (s.empty()) {
-        return false;
-    }
-    for (char c : s) {
-        if (c < '0' || c > '9') {
-            return false;
+std::vector<int> get_all_pids() {
+    std::vector<int> pids;
+    DIR* dir = opendir("/proc");
+    if (!dir) return pids;
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_DIR) {
+            std::string name = entry->d_name;
+            if (isdigit(name[0])) {
+                pids.push_back(std::stoi(name));
+            }
         }
     }
-    return true;
+    closedir(dir);
+    return pids;
 }
 
-std::string readComm(pid_t pid) {
+std::string get_process_name(int pid) {
     std::string path = "/proc/" + std::to_string(pid) + "/comm";
-    std::ifstream f(path);
-    std::string line;
-    if (std::getline(f, line)) {
-        return line;
+    std::ifstream comm_file(path);
+    std::string name = "unknown";
+    if (comm_file.is_open()) {
+        std::getline(comm_file, name);
     }
-    return {};
+    return name;
 }
 
-std::string readCmdline(pid_t pid) {
+// ─── 7️⃣ /proc/[pid]/cmdline — Full command line of a process ────────────────
+std::string get_process_cmdline(int pid) {
     std::string path = "/proc/" + std::to_string(pid) + "/cmdline";
-    std::ifstream f(path, std::ios::binary);
-    if (!f) {
-        return {};
-    }
-    std::string raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    if (raw.empty()) {
-        return {};
-    }
-    for (char& c : raw) {
-        if (c == '\0') {
-            c = ' ';
+    std::ifstream cmdline_file(path, std::ios::binary);
+    std::string cmdline = "";
+    if (cmdline_file.is_open()) {
+        std::getline(cmdline_file, cmdline, '\0');
+        // cmdline fields are null-separated; replace nulls with spaces
+        std::string full;
+        char c;
+        cmdline_file.seekg(0);
+        while (cmdline_file.get(c)) {
+            full += (c == '\0') ? ' ' : c;
         }
+        if (!full.empty()) cmdline = full;
     }
-    return raw;
+    return cmdline.empty() ? "[kernel/zombie]" : cmdline;
 }
 
-std::string readProcessState(pid_t pid) {
+// ─── 7️⃣ /proc/[pid]/status — Detailed process status info ──────────────────
+ProcessStatus get_process_status(int pid) {
+    ProcessStatus status;
+    status.pid = pid;
+    status.name = "unknown";
+    status.state = "unknown";
+    status.ppid = 0;
+    status.threads = 0;
+    status.vm_size_kb = 0;
+    status.vm_rss_kb = 0;
+    status.uid = 0;
+
     std::string path = "/proc/" + std::to_string(pid) + "/status";
-    std::ifstream f(path);
-    if (!f) {
-        return {};
-    }
+    std::ifstream status_file(path);
+    if (!status_file.is_open()) return status;
+
     std::string line;
-    while (std::getline(f, line)) {
-        if (line.rfind("State:", 0) == 0) {
-            return line;
+    while (std::getline(status_file, line)) {
+        std::istringstream iss(line);
+        std::string key;
+        iss >> key;
+
+        if (key == "Name:") {
+            iss >> status.name;
+        } else if (key == "State:") {
+            std::getline(iss, status.state);
+            // Trim leading whitespace
+            size_t start = status.state.find_first_not_of(" \t");
+            if (start != std::string::npos) status.state = status.state.substr(start);
+        } else if (key == "PPid:") {
+            iss >> status.ppid;
+        } else if (key == "Threads:") {
+            iss >> status.threads;
+        } else if (key == "VmSize:") {
+            iss >> status.vm_size_kb;
+        } else if (key == "VmRSS:") {
+            iss >> status.vm_rss_kb;
+        } else if (key == "Uid:") {
+            iss >> status.uid;
         }
     }
-    return {};
+    return status;
 }
 
-std::string jsonEscape(const std::string& s) {
-    std::string out;
-    out.reserve(s.size() + 8);
-    for (char c : s) {
-        if (c == '\\') out += "\\\\";
-        else if (c == '"') out += "\\\"";
-        else if (c == '\n') out += "\\n";
-        else if (c == '\r') out += "\\r";
-        else if (c == '\t') out += "\\t";
-        else out.push_back(c);
-    }
-    return out;
+// 3️⃣ Mutex-protected access to process count
+int get_process_count() {
+    pthread_mutex_lock(&proc_mut);
+    int count = get_all_pids().size();
+    pthread_mutex_unlock(&proc_mut);
+    return count;
 }
 
-} // namespace
-
-ProcessMonitor::ProcessMonitor(EventWriter* writer) : writer_(writer) {}
-
-bool ProcessMonitor::isSuspiciousName(const std::string& name) const {
-    if (name == "nc") {
-        return true;
-    }
-    const std::vector<std::string> bad = {
-        "ncat", "netcat", "nmap", "masscan", "hydra", "sqlmap", "nikto", "msf", "metasploit",
-    };
-    for (const auto& b : bad) {
-        if (name.find(b) != std::string::npos) {
-            return true;
-        }
-    }
-    return false;
+// 3️⃣ Mutex-protected access to full PID list (thread-safe variant)
+std::vector<int> get_all_pids_safe() {
+    pthread_mutex_lock(&proc_mut);
+    std::vector<int> pids = get_all_pids();
+    pthread_mutex_unlock(&proc_mut);
+    return pids;
 }
 
-void ProcessMonitor::scanOnce() {
-    DIR* d = opendir("/proc");
-    if (!d) {
-        return;
-    }
-    std::vector<std::pair<pid_t, std::string>> suspicious;
-    int count = 0;
-    while (dirent* ent = readdir(d)) {
-        std::string n(ent->d_name);
-        if (!isDigits(n)) {
-            continue;
+void* start_process_monitor(void* arg) {
+    std::cout << "[+] Process Monitor thread started." << std::endl;
+    while(true) {
+        int count = get_process_count();
+        if (count > 500) {
+            std::cout << "[MONITOR] Warning: High process count (" << count << ")" << std::endl;
         }
-        char* end = nullptr;
-        long pv = std::strtol(n.c_str(), &end, 10);
-        if (end == n.c_str() || pv <= 0) {
-            continue;
-        }
-        pid_t pid = static_cast<pid_t>(pv);
-        std::string comm = readComm(pid);
-        if (!comm.empty()) {
-            count++;
-            if (isSuspiciousName(comm)) {
-                suspicious.emplace_back(pid, comm);
-            }
-        }
-    }
-    closedir(d);
 
-    if (!suspicious.empty()) {
-        std::ostringstream payload;
-        payload << "{\"type\":\"SUSPICIOUS_PROCESS\",\"source\":\"os_engine\",\"severity\":\"HIGH\","
-                << "\"detail\":\"Suspicious comm names detected\",\"processes\":[";
-        for (size_t i = 0; i < suspicious.size(); ++i) {
-            if (i) {
-                payload << ',';
-            }
-            std::string cmdline = readCmdline(suspicious[i].first);
-            std::string state = readProcessState(suspicious[i].first);
-            payload << "{\"pid\":" << suspicious[i].first << ",\"name\":\""
-                    << jsonEscape(suspicious[i].second) << "\",\"cmdline\":\""
-                    << jsonEscape(cmdline) << "\",\"status\":\"" << jsonEscape(state) << "\"}";
+        // 7️⃣ Periodically log detailed info for top processes
+        std::vector<int> pids = get_all_pids_safe();
+        for (int i = 0; i < std::min((int)pids.size(), 3); i++) {
+            ProcessStatus ps = get_process_status(pids[i]);
+            std::string cmdline = get_process_cmdline(pids[i]);
+            // Demonstrates reading /proc/[pid]/status and /proc/[pid]/cmdline
+            (void)ps;      // Used for monitoring; suppress unused warning
+            (void)cmdline;
         }
-        payload << "]}";
-        writer_->writeLine(payload.str());
-    }
-    (void)count;
-}
 
-void ProcessMonitor::runLoop(std::atomic<bool>* stop_flag) {
-    using namespace std::chrono_literals;
-    while (!stop_flag->load()) {
-        scanOnce();
-        std::this_thread::sleep_for(1200ms);
+        sleep(5);
     }
+    return NULL;
 }

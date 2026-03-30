@@ -1,18 +1,8 @@
-#pragma once
+#ifndef RESPONSE_ENGINE_H
+#define RESPONSE_ENGINE_H
 
-#include <string>
+// The response engine will be largely handled by Python backend,
+// but the C++ engine can still trigger manual kills if needed directly.
+void trigger_response(int pid);
 
-class EventWriter;
-
-/**
- * Executes defensive actions (SIGTERM) and emits RESPONSE_ACTION events on the FIFO.
- */
-class ResponseEngine {
-public:
-    explicit ResponseEngine(EventWriter* writer);
-
-    void handleLockedCommand(const std::string& json_line);
-
-private:
-    EventWriter* writer_;
-};
+#endif

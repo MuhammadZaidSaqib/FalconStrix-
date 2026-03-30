@@ -1,44 +1,42 @@
-#!/usr/bin/env python3
-"""
-Modify a monitored canary file so the OS engine's mtime watcher raises FILE_TAMPER.
-"""
-from __future__ import annotations
-
 import json
 import os
 import time
-from datetime import datetime, timezone
+import sys
 
-from env_paths import events_fifo, watch_file
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(BASE_DIR, 'backend'))
+from ipc_config import PIPE_PATH  # noqa: E402
+TARGET_FILE = 'dummy_passwd.txt' if os.name == 'nt' else '/tmp/dummy_passwd'
 
-WATCH_FILE = watch_file()
-
-
-def _emit_fifo(obj: dict) -> None:
-    line = json.dumps(obj, separators=(",", ":")) + "\n"
-    with open(events_fifo(), "a", encoding="utf-8") as w:
-        w.write(line)
-        w.flush()
-
-
-def tamper() -> None:
-    os.makedirs(os.path.dirname(WATCH_FILE) or ".", exist_ok=True)
-    ts = datetime.now(timezone.utc).isoformat()
-    with open(WATCH_FILE, "a", encoding="utf-8") as f:
-        f.write(f"TAMPER {ts} red_team_canary\n")
-        f.flush()
-    time.sleep(0.1)
-    _emit_fifo(
-        {
-            "type": "RED_TEAM_FILE",
-            "source": "red_team",
-            "severity": "MEDIUM",
-            "detail": f"Canary file modified: {WATCH_FILE}",
-            "path": WATCH_FILE,
-            "force_alert": True,
-        }
-    )
-
+def main():
+    print("[RED TEAM] Simulating critical file tampering (/etc/passwd style)...")
+    
+    # We will simulate the attack by creating a dummy file, editing it rapidly, and sending events
+    target = TARGET_FILE
+    with open(target, 'w') as f:
+        f.write("root:x:0:0:\n")
+        
+    time.sleep(1)
+    
+    with open(target, 'a') as f:
+        f.write("hacker:x:0:0:\n")
+        
+    print(f"-> Modified {target}")
+    
+    event = {
+        "event_type": "FILE_TAMPER",
+        "description": f"Unauthorized modification of critical file {target}",
+        "source": "File_System",
+        "pid": os.getpid(),
+        "process_name": "tamper_script",
+        "severity": 4 # CRITICAL severity
+    }
+    
+    try:
+        with open(PIPE_PATH, 'a') as f:
+            f.write(json.dumps(event) + "\n")
+    except Exception:
+        pass
 
 if __name__ == "__main__":
-    tamper()
+    main()

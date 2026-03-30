@@ -1,49 +1,49 @@
--- Alert analysis and SOC-oriented queries (hidrs_db)
-
 USE hidrs_db;
 
--- Recent alerts with severity and originating event
-SELECT a.alert_id, a.title, a.created_at,
-       s.code AS severity, s.numeric_level,
-       e.event_type, e.source, e.description
+-- 1. Get all unresolved alerts with their event details and severity
+SELECT 
+    a.alert_id,
+    s.level_name AS severity,
+    a.message,
+    e.event_type,
+    e.description AS event_description,
+    p.process_name,
+    u.username,
+    a.timestamp
 FROM Alerts a
-JOIN Severity s ON s.severity_id = a.severity_id
-JOIN Events e ON e.event_id = a.event_id
-ORDER BY a.created_at DESC
-LIMIT 100;
+JOIN Events e ON a.event_id = e.event_id
+JOIN Severity s ON a.severity_id = s.severity_id
+LEFT JOIN Processes p ON e.process_id = p.process_id
+LEFT JOIN Users u ON e.user_id = u.user_id
+WHERE a.is_resolved = FALSE
+ORDER BY s.severity_id DESC, a.timestamp DESC;
 
--- Alert volume by severity (last 24h)
-SELECT s.code, COUNT(*) AS cnt
+-- 2. Count alerts by severity in the last 24 hours
+SELECT 
+    s.level_name,
+    COUNT(a.alert_id) AS alert_count
 FROM Alerts a
-JOIN Severity s ON s.severity_id = a.severity_id
-WHERE a.created_at >= NOW() - INTERVAL 1 DAY
-GROUP BY s.code, s.severity_id
-ORDER BY s.numeric_level DESC;
+JOIN Severity s ON a.severity_id = s.severity_id
+WHERE a.timestamp >= NOW() - INTERVAL 1 DAY
+GROUP BY s.level_name;
 
--- Suspicious process-related events
-SELECT e.event_id, e.event_type, e.source, e.created_at, e.payload
+-- 3. Review FSM State History
+SELECT 
+    previous_state,
+    new_state,
+    reason,
+    changed_at
+FROM FSM_State_History
+ORDER BY changed_at DESC
+LIMIT 10;
+
+-- 4. Find potential process floods (processes grouped by name in recent events)
+SELECT 
+    p.process_name,
+    COUNT(*) as execution_count
 FROM Events e
-WHERE e.event_type IN ('PROCESS_SPIKE','SUSPICIOUS_PROCESS','PROCESS_ANOMALY')
-   OR JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$.type')) IN ('PROCESS_SPIKE','SUSPICIOUS_PROCESS')
-ORDER BY e.created_at DESC
-LIMIT 200;
-
--- FSM transition audit trail
-SELECT h.history_id, h.from_state, h.to_state, h.reason, h.created_at,
-       a.alert_id, a.title
-FROM FSM_State_History h
-LEFT JOIN Alerts a ON a.alert_id = h.alert_id
-ORDER BY h.created_at DESC
-LIMIT 100;
-
--- Current FSM + hardware mapping (conceptual LEDs)
-SELECT state_name, hardware_led, last_reason, updated_at
-FROM FSM_Current_State
-WHERE id = 1;
-
--- Response actions after LOCKED / kill operations
-SELECT r.log_id, r.action, r.target_pid, r.detail, r.created_at, e.event_type
-FROM Response_Log r
-LEFT JOIN Events e ON e.event_id = r.event_id
-ORDER BY r.created_at DESC
-LIMIT 100;
+JOIN Processes p ON e.process_id = p.process_id
+WHERE e.event_type = 'PROCESS_CREATE'
+  AND e.timestamp >= NOW() - INTERVAL 1 HOUR
+GROUP BY p.process_name
+HAVING execution_count > 10;
