@@ -6,7 +6,7 @@
     <script>if ('scrollRestoration' in history) history.scrollRestoration = 'manual';</script>
     <title>FalconStrix — SOC Dashboard</title>
     <meta name="description" content="Hybrid Behavioral Cybersecurity SOC Command Center with OS-Level Integration">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260330o') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
@@ -29,6 +29,8 @@
                 <div class="nav-section-label">Monitoring</div>
                 <button class="nav-item active" data-page="dashboard" id="nav-dashboard"><span class="nav-text">Dashboard</span></button>
                 <button class="nav-item" data-page="alerts" id="nav-alerts"><span class="nav-text">Live Alerts</span><span class="nav-badge" id="sidebar-alert-count">0</span></button>
+                <button class="nav-item" data-page="resolved-cases" id="nav-resolved-cases"><span class="nav-text">Resolved Cases</span></button>
+                <button class="nav-item" data-page="terminated-processes" id="nav-terminated-processes"><span class="nav-text">Terminated Processes</span></button>
                 <button class="nav-item" data-page="events" id="nav-events"><span class="nav-text">Events Log</span></button>
                 <button class="nav-item" data-page="process-monitor" id="nav-process-monitor"><span class="nav-text">Process Monitor</span><span class="nav-badge" style="background:#00c3ff">LIVE</span></button>
                 <button class="nav-item" data-page="fsm" id="nav-fsm"><span class="nav-text">FSM State</span></button>
@@ -86,11 +88,11 @@
                                     <div class="ov-left"><span class="ov-icon red">⭘</span> <span class="ov-name">Active Threats</span></div>
                                     <div class="ov-right"><strong id="dash-active-threats" class="ov-val red-text">16</strong> <span class="ov-arrow">›</span></div>
                                 </div>
-                                <div class="ov-item" onclick="switchPage('events')" style="cursor: pointer;">
+                                <div class="ov-item" onclick="switchPage('resolved-cases')" style="cursor: pointer;">
                                     <div class="ov-left"><span class="ov-icon green">✔</span> <span class="ov-name">Resolved Cases</span></div>
                                     <div class="ov-right"><strong id="dash-resolved" class="ov-val green-text">128</strong> <span class="ov-arrow">›</span></div>
                                 </div>
-                                <div class="ov-item" onclick="switchPage('events')" style="cursor: pointer;">
+                                <div class="ov-item" onclick="switchPage('terminated-processes')" style="cursor: pointer;">
                                     <div class="ov-left"><span class="ov-icon purple">☠</span> <span class="ov-name">Processes Terminated</span></div>
                                     <div class="ov-right"><strong id="dash-kills" class="ov-val purple-text">0</strong> <span class="ov-arrow">›</span></div>
                                 </div>
@@ -329,10 +331,87 @@
                 </section>
             </main>
 
+            <!-- ════════ PAGE: RESOLVED CASES ════════ -->
+            <main id="page-resolved-cases" class="page">
+                <section class="panel feed-container">
+                    <div class="panel-heading"><h2>Resolved Cases Audit</h2></div>
+                    <div class="table-filters">
+                        <input id="resolved-filter-case-id" type="text" placeholder="Case ID" />
+                        <input id="resolved-filter-text" type="text" placeholder="Search (event/process/how)" />
+                        <input id="resolved-filter-pid" type="text" placeholder="PID" />
+                        <input id="resolved-filter-from" type="datetime-local" title="Resolved from" />
+                        <input id="resolved-filter-to" type="datetime-local" title="Resolved to" />
+                        <div class="quick-chip-row">
+                            <button id="resolved-chip-today" type="button" class="quick-chip-btn">Today</button>
+                            <button id="resolved-chip-24h" type="button" class="quick-chip-btn">24h</button>
+                            <button id="resolved-chip-7d" type="button" class="quick-chip-btn">7d</button>
+                        </div>
+                        <button id="resolved-export-csv" type="button" class="filter-export-btn">Export CSV (Filtered)</button>
+                        <button id="resolved-filter-clear" type="button" class="filter-clear-btn">Clear</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="alerts-table">
+                            <thead>
+                                <tr>
+                                    <th>Case ID</th>
+                                    <th>Severity</th>
+                                    <th>Trigger Event</th>
+                                    <th>Detected At</th>
+                                    <th>Resolved At</th>
+                                    <th>How Resolved</th>
+                                    <th>Process Name</th>
+                                    <th>PID</th>
+                                    <th>Process Created</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resolved-cases-table"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ════════ PAGE: TERMINATED PROCESSES ════════ -->
+            <main id="page-terminated-processes" class="page">
+                <section class="panel feed-container">
+                    <div class="panel-heading"><h2>Terminated Processes Audit</h2></div>
+                    <div class="table-filters">
+                        <input id="terminated-filter-user" type="text" placeholder="User (terminated by)" />
+                        <input id="terminated-filter-pid" type="text" placeholder="PID" />
+                        <input id="terminated-filter-text" type="text" placeholder="Search (process/details)" />
+                        <input id="terminated-filter-from" type="datetime-local" title="Terminated from" />
+                        <input id="terminated-filter-to" type="datetime-local" title="Terminated to" />
+                        <div class="quick-chip-row">
+                            <button id="terminated-chip-today" type="button" class="quick-chip-btn">Today</button>
+                            <button id="terminated-chip-24h" type="button" class="quick-chip-btn">24h</button>
+                            <button id="terminated-chip-7d" type="button" class="quick-chip-btn">7d</button>
+                        </div>
+                        <button id="terminated-export-csv" type="button" class="filter-export-btn">Export CSV (Filtered)</button>
+                        <button id="terminated-filter-clear" type="button" class="filter-clear-btn">Clear</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="alerts-table">
+                            <thead>
+                                <tr>
+                                    <th>Terminated At</th>
+                                    <th>Terminated By</th>
+                                    <th>Action Type</th>
+                                    <th>Process Name</th>
+                                    <th>PID</th>
+                                    <th>Process Created At</th>
+                                    <th>Source</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="terminated-processes-table"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
+
             <!-- ════════ PAGE: EVENTS ════════ -->
             <main id="page-events" class="page">
                 <section class="panel events-container">
-                    <div class="panel-heading"><h2>Recent Events</h2><span class="panel-caption">Latest backend activity</span></div>
+                    <div class="panel-heading"><h2>Recent Events</h2></div>
                     <ul id="event-list" class="event-list"></ul>
                 </section>
             </main>
@@ -342,7 +421,6 @@
                 <section class="panel">
                     <div class="panel-heading">
                         <h2>System Process Monitor</h2>
-                        <span class="panel-caption">Real-time task tracking with behavioral detection</span>
                     </div>
                     <div class="table-responsive">
                         <table class="process-table">
@@ -378,7 +456,7 @@
                     </div>
                 </section>
                 <section class="panel timeline-container">
-                    <div class="panel-heading"><h2>FSM Transition History</h2><span class="panel-caption">Recent state changes</span></div>
+                    <div class="panel-heading"><h2>FSM Transition History</h2></div>
                     <ul id="state-history-list" class="history-list"></ul>
                 </section>
             </main>
@@ -389,52 +467,53 @@
                     <div class="concept-detail-split">
                         <div class="concept-detail-main">
                     <div class="panel-heading"><h2>Operating System Concepts Used</h2><span class="panel-caption">10 concepts fully integrated</span></div>
+                    <p class="detail-hint os-concepts-readme"><strong>How to use this page:</strong> each card opens a <strong>full topic page</strong> with real source, a live diagram, and code that <strong>highlights in sync</strong> with the animation (usually 5 seconds per step). The engine ties these ideas together—e.g. threads share a mutex, signals stop them, IPC ships events to Python.</p>
                     <div class="os-detail-grid">
                         <div class="os-detail-card" data-page="os-process">
                             <div class="os-detail-header"><h3>Process Creation &amp; Management</h3></div>
-                            <div class="os-detail-body"><p>Implemented using <code>fork()</code> in <code>main.cpp</code>. Parent supervises the system while child runs the monitoring engine. Uses <code>waitpid()</code> for zombie process handling.</p><div class="os-tags"><span class="os-tag">fork()</span><span class="os-tag">wait()</span><span class="os-tag">PCB</span><span class="os-tag">Parent-Child</span></div></div>
+                            <div class="os-detail-body"><p>Implemented using <code>fork()</code> in <code>main.cpp</code>. Parent supervises the system while child runs the monitoring engine. Uses <code>waitpid()</code> for zombie process handling.</p><p>After <code>fork</code>, parent and child are separate processes: different memory, same program text until they diverge.</p><div class="os-tags"><span class="os-tag">fork()</span><span class="os-tag">wait()</span><span class="os-tag">PCB</span><span class="os-tag">Parent-Child</span></div></div>
                         </div>
                         <div class="os-detail-card" data-page="os-threads">
                             <div class="os-detail-header"><h3>Multithreading (Concurrency)</h3></div>
-                            <div class="os-detail-body"><p>Uses POSIX threads for parallel execution: process monitoring, behavioral detection, resource monitoring — all running concurrently.</p><div class="os-tags"><span class="os-tag">pthread_create</span><span class="os-tag">pthread_join</span><span class="os-tag">Parallel</span></div></div>
+                            <div class="os-detail-body"><p>Uses POSIX threads for parallel execution: process monitoring, behavioral detection, resource monitoring — all running concurrently.</p><p>Threads are lighter than processes: same PID, shared globals, but independent call stacks and instruction pointers.</p><div class="os-tags"><span class="os-tag">pthread_create</span><span class="os-tag">pthread_join</span><span class="os-tag">Parallel</span></div></div>
                         </div>
                         <div class="os-detail-card" data-page="os-sync">
                             <div class="os-detail-header"><h3>Synchronization (Mutex)</h3></div>
-                            <div class="os-detail-body"><p>Shared data protected using <code>pthread_mutex_t</code>. Both monitor and detector threads acquire the lock before reading <code>/proc</code>.</p><div class="os-tags"><span class="os-tag">Mutex</span><span class="os-tag">Critical Section</span><span class="os-tag">Thread Safety</span></div></div>
+                            <div class="os-detail-body"><p>Shared data protected using <code>pthread_mutex_t</code>. Both monitor and detector threads acquire the lock before reading <code>/proc</code>.</p><p>Without the lock, two readers could see a PID list change mid-scan—mutexes turn that into “one at a time.”</p><div class="os-tags"><span class="os-tag">Mutex</span><span class="os-tag">Critical Section</span><span class="os-tag">Thread Safety</span></div></div>
                         </div>
                         <div class="os-detail-card" data-page="os-ipc">
                             <div class="os-detail-header"><h3>Inter-Process Communication</h3></div>
-                            <div class="os-detail-body"><p>Named Pipes (FIFO) connect Red Team and C++ Engine to the Python Backend. Non-blocking write on C++ side, blocking read on Python side.</p><div class="os-tags"><span class="os-tag">Named Pipes</span><span class="os-tag">mkfifo</span><span class="os-tag">O_NONBLOCK</span></div></div>
+                            <div class="os-detail-body"><p>Named Pipes (FIFO) connect Red Team and C++ Engine to the Python Backend. Non-blocking write on C++ side, blocking read on Python side.</p><p>Think of it as a shared file or FIFO buffer: writers push bytes; the backend drains lines and parses JSON.</p><div class="os-tags"><span class="os-tag">Named Pipes</span><span class="os-tag">mkfifo</span><span class="os-tag">O_NONBLOCK</span></div></div>
                         </div>
                         <div class="os-detail-card" data-page="os-signals">
                             <div class="os-detail-header"><h3>Signal Handling</h3></div>
-                            <div class="os-detail-body"><p>Registers <code>signal(SIGINT, handler)</code> and <code>signal(SIGTERM, handler)</code> for graceful shutdown. Parent forwards signals to child.</p><div class="os-tags"><span class="os-tag">SIGINT</span><span class="os-tag">SIGTERM</span><span class="os-tag">Async Events</span></div></div>
+                            <div class="os-detail-body"><p>Registers <code>signal(SIGINT, handler)</code> and <code>signal(SIGTERM, handler)</code> for graceful shutdown. Parent forwards signals to child.</p><p>Signals are OS-level interrupts to a process; handlers run asynchronously and should only flip safe flags and forward work.</p><div class="os-tags"><span class="os-tag">SIGINT</span><span class="os-tag">SIGTERM</span><span class="os-tag">Async Events</span></div></div>
                         </div>
                         <div class="os-detail-card" data-page="response">
                             <div class="os-detail-header"><h3>Process Control &amp; Termination</h3></div>
-                            <div class="os-detail-body"><p>Suspicious processes terminated using <code>kill(pid, SIGKILL)</code> in both C++ and Python. OS-level enforcement.</p><div class="os-tags"><span class="os-tag">kill()</span><span class="os-tag">SIGKILL</span><span class="os-tag">os.kill()</span></div></div>
+                            <div class="os-detail-body"><p>Suspicious processes terminated using <code>kill(pid, SIGKILL)</code> in both C++ and Python. OS-level enforcement.</p><p><code>SIGKILL</code> cannot be caught—use only when you intend to tear the target down immediately.</p><div class="os-tags"><span class="os-tag">kill()</span><span class="os-tag">SIGKILL</span><span class="os-tag">os.kill()</span></div></div>
                         </div>
                         <div class="os-detail-card" data-page="os-process">
                             <div class="os-detail-header"><h3>/proc Filesystem Interaction</h3></div>
-                            <div class="os-detail-body"><p>Reads <code>/proc/[pid]/comm</code>, <code>/proc/[pid]/cmdline</code>, and <code>/proc/[pid]/status</code> for process name, command, state, threads, memory.</p><div class="os-tags"><span class="os-tag">/proc/comm</span><span class="os-tag">/proc/cmdline</span><span class="os-tag">/proc/status</span></div></div>
+                            <div class="os-detail-body"><p>Reads <code>/proc/[pid]/comm</code>, <code>/proc/[pid]/cmdline</code>, and <code>/proc/[pid]/status</code> for process name, command, state, threads, memory.</p><p><code>/proc</code> is not a normal disk tree—it is the kernel exposing live process and system state as text files.</p><div class="os-tags"><span class="os-tag">/proc/comm</span><span class="os-tag">/proc/cmdline</span><span class="os-tag">/proc/status</span></div></div>
                         </div>
                         <div class="os-detail-card" data-page="os-resources">
                             <div class="os-detail-header"><h3>Resource Monitoring</h3></div>
-                            <div class="os-detail-body"><p>Dedicated thread reads <code>/proc/stat</code> for CPU and <code>/proc/meminfo</code> for memory. Alerts at &gt;90% threshold.</p><div class="os-tags"><span class="os-tag">CPU %</span><span class="os-tag">Memory %</span><span class="os-tag">/proc/stat</span></div></div>
+                            <div class="os-detail-body"><p>Dedicated thread reads <code>/proc/stat</code> for CPU and <code>/proc/meminfo</code> for memory. Alerts at &gt;90% threshold.</p><p>CPU usage here is a <em>rate</em> from two samples; memory uses total vs available, not a single magic counter.</p><div class="os-tags"><span class="os-tag">CPU %</span><span class="os-tag">Memory %</span><span class="os-tag">/proc/stat</span></div></div>
                         </div>
                         <div class="os-detail-card" data-page="os-threads">
                             <div class="os-detail-header"><h3>Concurrency &amp; Parallel Design</h3></div>
-                            <div class="os-detail-body"><p>Multi-process (fork) + multi-thread (pthread) + multi-service (Backend, Dashboard, Red Team) all working in parallel.</p><div class="os-tags"><span class="os-tag">Parallel</span><span class="os-tag">Multi-Service</span><span class="os-tag">Task Distribution</span></div></div>
+                            <div class="os-detail-body"><p>Multi-process (fork) + multi-thread (pthread) + multi-service (Backend, Dashboard, Red Team) all working in parallel.</p><p>Isolation (separate processes) meets throughput (threads inside the engine) meets tooling (Python services)—each layer has different failure boundaries.</p><div class="os-tags"><span class="os-tag">Parallel</span><span class="os-tag">Multi-Service</span><span class="os-tag">Task Distribution</span></div></div>
                         </div>
                         <div class="os-detail-card" data-page="os-process">
                             <div class="os-detail-header"><h3>Fault Tolerance &amp; Supervision</h3></div>
-                            <div class="os-detail-body"><p>Parent runs supervision loop: if child crashes, it restarts after 2s. Uses <code>WIFEXITED</code>, <code>WIFSIGNALED</code> macros.</p><div class="os-tags"><span class="os-tag">Restart Loop</span><span class="os-tag">waitpid</span><span class="os-tag">Fault Recovery</span></div></div>
+                            <div class="os-detail-body"><p>Parent runs supervision loop: if child crashes, it restarts after 2s. Uses <code>WIFEXITED</code>, <code>WIFSIGNALED</code> macros.</p><p><code>waitpid</code> also reaps the child entry in the process table so you do not accumulate zombies after each restart.</p><div class="os-tags"><span class="os-tag">Restart Loop</span><span class="os-tag">waitpid</span><span class="os-tag">Fault Recovery</span></div></div>
                         </div>
                     </div>
                         </div>
                         <aside class="concept-viz-aside" aria-label="Concept map">
                             <h3 class="thread-viz-title">Architecture map</h3>
-                            <p class="thread-viz-lead">Ten integrated concepts; the highlighted card rotates to show how each piece connects to the live engine.</p>
+                            <p class="thread-viz-lead">Ten integrated concepts; the highlighted card rotates to show how each piece connects to the live engine. <strong>Tip:</strong> read the numbers as a rough pipeline—fork creates the child, threads and mutex do the work, IPC exports events, signals and <code>kill</code> shut things down cleanly.</p>
                             <div class="concept-viz-map">
                                 <div class="concept-viz-node" data-concept-viz-node><strong>1</strong> fork / wait</div>
                                 <div class="concept-viz-node" data-concept-viz-node><strong>2</strong> pthread workers</div>
@@ -460,8 +539,8 @@
                         <div class="concept-detail-main">
                     <div class="concept-detail-hero"><div><h2>Process Creation &amp; Management</h2><p class="hero-sub">fork(), wait(), Parent-Child Architecture</p></div></div>
                     <div class="concept-detail-content">
-                        <div class="detail-section"><h3>How It Works</h3><p>The <code>main.cpp</code> C++ engine uses <code>fork()</code> to create a child process. The parent acts as a supervisor while the child runs 3 monitoring threads. <code>waitpid()</code> collects exit status to prevent zombie processes and enable crash-restart.</p></div>
-                        <div class="detail-section"><h3>Source Code — main.cpp (complete)</h3><pre><code>#include &lt;iostream&gt;
+                        <div class="detail-section detail-section--readable"><h3>How It Works (from real <code>main.cpp</code>)</h3><p><strong>Big picture:</strong> <code>main()</code> runs a <code>while (running)</code> loop. Each iteration calls <code>fork()</code> once. The <strong>child</strong> only runs the monitoring engine (<code>run_child_engine()</code> + <code>_exit(0)</code>). The <strong>parent</strong> saves the child PID, then <strong>blocks</strong> in <code>waitpid()</code> until the child exits. If the child crashes or is killed, the parent waits 2 seconds and <strong>forks again</strong> (fault recovery).</p><p><strong>Why it looks odd at first:</strong> after <code>fork()</code>, the same source file keeps running in <em>two</em> processes. The return value of <code>fork()</code> tells you which role you are in—<code>pid == 0</code> means child, <code>pid &gt; 0</code> means parent (that number is the child’s PID). The parent must <code>waitpid</code> so the kernel can free the child’s bookkeeping entry; otherwise you get <strong>zombie</strong> processes stacking up.</p><p class="detail-hint">Use the <strong>right panel</strong> for the live diagram; the <strong>source code below</strong> highlights the matching block and scrolls to it. Same six steps — <strong>5 seconds</strong> each, <strong>30 seconds</strong> per full cycle. Step ⑤ uses <code>WIFEXITED</code> (normal exit code) vs <code>WIFSIGNALED</code> (killed by signal) to decide whether to restart.</p></div>
+                        <div class="detail-section"><h3>Source Code — main.cpp (real flow excerpt)</h3><p class="code-sync-hint">The <strong>highlighted block</strong> matches the active step on the right; the panel <strong>scrolls</strong> so that code stays in view.</p><pre class="os-process-code-pre" id="os-process-code-scroll"><code id="os-process-code-main">#include &lt;iostream&gt;
 #include &lt;unistd.h&gt;
 #include &lt;sys/types.h&gt;
 #include &lt;sys/wait.h&gt;
@@ -471,12 +550,13 @@
 #include "process_monitor.h"
 #include "behavior_detector.h"
 #include "resource_monitor.h"
+#include "response_engine.h"
 
 // 5. Signal Handling — async-signal-safe flag
 volatile sig_atomic_t running = 1;
 static pid_t child_pid = -1;
 
-// 5. Parent signal handler
+<span class="code-step-block" data-code-phase="shutdown">// 5. Parent signal handler
 void signal_handler(int signum) {
     if (signum == SIGINT) {
         std::cout &lt;&lt; "\n[SIGNAL] Caught SIGINT (Ctrl+C), initiating graceful shutdown..." &lt;&lt; std::endl;
@@ -495,89 +575,121 @@ void child_signal_handler(int signum) {
     std::cout &lt;&lt; "[SIGNAL] Child received signal " &lt;&lt; signum &lt;&lt; ", stopping threads..." &lt;&lt; std::endl;
     running = 0;
 }
-
-// 2. Multithreading — child engine runs 3 POSIX threads
+</span>
+<span class="code-step-block" data-code-phase="threads">// Child process work
 void run_child_engine() {
     signal(SIGINT, child_signal_handler);
     signal(SIGTERM, child_signal_handler);
 
-    pthread_t monitor_thread, detector_thread, resource_thread;
+    pthread_t monitor_thread, detector_thread, resource_thread, response_thread;
+    void* flag_ptr = (void*)&amp;running;
 
-    // Thread 1: Process Monitor (enumerates /proc)
-    pthread_create(&amp;monitor_thread, NULL, start_process_monitor, NULL);
-    // Thread 2: Behavior Detector (anomaly scanning)
-    pthread_create(&amp;detector_thread, NULL, start_behavior_detector, NULL);
-    // Thread 3: Resource Monitor (CPU &amp; Memory)
-    pthread_create(&amp;resource_thread, NULL, start_resource_monitor, NULL);
+    pthread_create(&amp;monitor_thread, NULL, start_process_monitor, flag_ptr);
+    pthread_create(&amp;detector_thread, NULL, start_behavior_detector, flag_ptr);
+    pthread_create(&amp;resource_thread, NULL, start_resource_monitor, flag_ptr);
+    pthread_create(&amp;response_thread, NULL, start_response_engine, flag_ptr);
 
     pthread_join(monitor_thread, NULL);
     pthread_join(detector_thread, NULL);
     pthread_join(resource_thread, NULL);
+    pthread_join(response_thread, NULL);
 
     std::cout &lt;&lt; "[*] Child engine: All worker threads stopped." &lt;&lt; std::endl;
 }
-
-// 1. Process Creation — fork() + 10. Fault Tolerance — restart loop
-int main() {
-    std::cout &lt;&lt; "[*] Starting Blue Team OS Engine (Parent PID: " &lt;&lt; getpid() &lt;&lt; ")" &lt;&lt; std::endl;
+</span>
+<span class="code-step-block" data-code-phase="fork">int main() {
+    std::cout &lt;&lt; "[*] Starting Blue Team OS Engine..." &lt;&lt; std::endl;
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
     while (running) {
-        pid_t pid = fork();  // 1. Process Creation
+        pid_t pid = fork();
         if (pid &lt; 0) {
-            std::cerr &lt;&lt; "[!] fork() failed." &lt;&lt; std::endl;
+            std::cerr &lt;&lt; "[ERROR] Fork failed." &lt;&lt; std::endl;
             return 1;
         }
         if (pid == 0) {
-            // CHILD PROCESS — runs monitoring engine
-            std::cout &lt;&lt; "[*] Child engine started (PID: " &lt;&lt; getpid() &lt;&lt; ")" &lt;&lt; std::endl;
             run_child_engine();
             _exit(0);
         } else {
-            // PARENT PROCESS — supervises child
-            child_pid = pid;
+</span><span class="code-step-block" data-code-phase="assign">            child_pid = pid;
+            std::cout &lt;&lt; "[*] Parent Engine supervising child workers (PID: " &lt;&lt; pid &lt;&lt; ")" &lt;&lt; std::endl;
             int status;
-            waitpid(pid, &amp;status, 0);  // 1. Zombie prevention
+</span><span class="code-step-block" data-code-phase="wait">            waitpid(pid, &amp;status, 0);
 
-            if (!running) break;  // Graceful shutdown
-
-            // 10. Fault Tolerance — restart crashed child
-            if (WIFEXITED(status) &amp;&amp; WEXITSTATUS(status) != 0) {
-                std::cerr &lt;&lt; "[!] Child exited with error (code "
-                          &lt;&lt; WEXITSTATUS(status) &lt;&lt; "), restarting in 2s..." &lt;&lt; std::endl;
-                sleep(2);
-                continue;
+            if (!running) break;
+</span><span class="code-step-block" data-code-phase="recovery">            if (WIFEXITED(status)) {
+                int exit_code = WEXITSTATUS(status);
+                if (exit_code != 0) {
+                    std::cerr &lt;&lt; "[!] Child exited with error code " &lt;&lt; exit_code
+                              &lt;&lt; ", restarting in 2 seconds..." &lt;&lt; std::endl;
+                    sleep(2);
+                    continue;
+                } else {
+                    std::cout &lt;&lt; "[*] Child exited normally (code 0)." &lt;&lt; std::endl;
+                    break;
+                }
             } else if (WIFSIGNALED(status)) {
-                std::cerr &lt;&lt; "[!] Child killed by signal " &lt;&lt; WTERMSIG(status)
-                          &lt;&lt; ", restarting in 2s..." &lt;&lt; std::endl;
+                int term_sig = WTERMSIG(status);
+                std::cerr &lt;&lt; "[!] Child killed by signal " &lt;&lt; term_sig
+                          &lt;&lt; ", restarting in 2 seconds..." &lt;&lt; std::endl;
                 sleep(2);
                 continue;
             }
-            break;  // Normal exit
         }
     }
-    std::cout &lt;&lt; "[*] Parent shutting down." &lt;&lt; std::endl;
+    std::cout &lt;&lt; "[*] Blue Team OS Engine shut down cleanly." &lt;&lt; std::endl;
     return 0;
-}</code></pre></div>
+}</span></code></pre></div>
                         <div class="detail-section"><h3>File</h3><p><code>os_engine_cpp/src/main.cpp</code></p></div>
                     </div>
                         </div>
                         <aside class="concept-viz-aside thread-viz-aside" aria-label="fork and waitpid visualization">
-                            <h3 class="thread-viz-title">Parent / child</h3>
-                            <p class="thread-viz-lead">Supervisor <strong>fork()</strong>s the monitoring engine, then blocks on <strong>waitpid()</strong>. Restart logic uses <code>WIFEXITED</code> / <code>WIFSIGNALED</code>.</p>
-                            <div class="viz-fork-row">
-                                <div id="viz-os-process-parent" class="viz-proc-card">
-                                    <div class="viz-label">Parent</div>
-                                    <div class="viz-sub">waitpid · forward signals · restart on crash</div>
+                            <div class="res-viz-toolbar" role="group" aria-label="Animation controls">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-process" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-process">Stop</button>
+                                <span class="res-viz-state" id="viz-state-os-process" aria-live="polite">Running</span>
+                            </div>
+                            <h3 class="thread-viz-title">Parent / child (animated from main.cpp)</h3>
+                            <p class="thread-viz-lead">This loop mirrors <code>main()</code>: <strong>fork</strong> → parent sets <code>child_pid</code> → child runs <code>run_child_engine()</code> (four pthread workers) → parent <strong>waitpid</strong> → <code>WIFEXITED</code>/<code>WIFSIGNALED</code> + <code>sleep(2)</code> restart. Step ⑥ is shutdown: Ctrl+C sets <code>running=0</code>, parent kills the child, loops exit.</p>
+                            <div class="viz-pc-wrap" id="viz-os-process-graph" data-phase="fork">
+                                <div class="viz-pc-phases" aria-hidden="true">
+                                    <span class="viz-pc-phase" data-pc-phase="fork"><strong>①</strong> fork()</span>
+                                    <span class="viz-pc-phase" data-pc-phase="assign"><strong>②</strong> child_pid = pid</span>
+                                    <span class="viz-pc-phase" data-pc-phase="threads"><strong>③</strong> pthread_create ×4</span>
+                                    <span class="viz-pc-phase" data-pc-phase="wait"><strong>④</strong> waitpid(…)</span>
+                                    <span class="viz-pc-phase" data-pc-phase="recovery"><strong>⑤</strong> WIFEXITED / WIFSIGNALED</span>
+                                    <span class="viz-pc-phase" data-pc-phase="shutdown"><strong>⑥</strong> signal → kill(child)</span>
                                 </div>
-                                <div class="viz-fork-join">fork()</div>
-                                <div id="viz-os-process-child" class="viz-proc-card">
-                                    <div class="viz-label">Child</div>
-                                    <div class="viz-sub">run_child_engine() · 3× pthread_join</div>
+                                <div class="viz-pc-flow">
+                                    <div id="viz-os-process-parent" class="viz-proc-card">
+                                        <div class="viz-label">Parent process</div>
+                                        <div class="viz-sub">main() · while(running) · signal_handler → kill(child_pid)</div>
+                                    </div>
+                                    <div class="viz-pc-connector" aria-hidden="true">
+                                        <div class="viz-pc-connector-line"></div>
+                                        <div id="viz-os-process-fork-label" class="viz-fork-join">fork()</div>
+                                        <div class="viz-pc-packet" id="viz-os-process-packet"></div>
+                                    </div>
+                                    <div id="viz-os-process-child" class="viz-proc-card">
+                                        <div class="viz-label">Child process</div>
+                                        <div class="viz-sub">if (pid==0) run_child_engine() · _exit(0)</div>
+                                        <div class="viz-pc-thread-dots" title="Four worker threads">
+                                            <span></span><span></span><span></span><span></span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <p class="viz-dynamic-caption" id="viz-os-process-caption"></p>
+                            <div class="viz-pc-explain" id="viz-os-process-explain" aria-live="polite">
+                                <div class="viz-pc-explain-head">
+                                    <span class="viz-pc-explain-kicker">Current step</span>
+                                    <h4 class="viz-pc-explain-title" id="viz-os-process-phase-title">Loading…</h4>
+                                </div>
+                                <p class="viz-pc-explain-lead" id="viz-os-process-phase-lead"></p>
+                                <ul class="viz-pc-explain-list" id="viz-os-process-phase-bullets"></ul>
+                                <p class="viz-pc-explain-code" id="viz-os-process-code-ref"></p>
+                            </div>
                         </aside>
                     </div>
                 </section>
@@ -589,8 +701,8 @@ int main() {
                         <div class="concept-detail-main">
                     <div class="concept-detail-hero"><div><h2>Multithreading (Concurrency)</h2><p class="hero-sub">POSIX Threads — pthread_create, pthread_join</p></div></div>
                     <div class="concept-detail-content">
-                        <div class="detail-section"><h3>How It Works</h3><p>Three threads run concurrently inside the child process: Process Monitor, Behavior Detector, and Resource Monitor. Each runs an infinite loop performing its task with periodic <code>sleep()</code> intervals.</p></div>
-                        <div class="detail-section"><h3>Thread Entry Points (from source files)</h3><pre><code>// ─── process_monitor.cpp ─── Thread 1
+                        <div class="detail-section"><h3>How It Works</h3><p>After <code>fork()</code>, the child installs four workers via <code>pthread_create</code>; here we focus on three that run until <code>running</code> becomes 0. They share the <strong>same address space</strong> (global mutex, same PID) but each has its own stack and program counter. The OS scheduler <strong>interleaves</strong> them preemptively—you are not guaranteed strict round-robin order. Shorter <code>sleep(2)</code> on the behavior detector means it can wake <strong>more often</strong> than the monitors (5s), so it can spot spikes or suspicious processes between slower ticks. Blocking in <code>sleep</code> yields the CPU to siblings without busy-waiting.</p><p class="detail-hint"><strong>Remember:</strong> <code>getpid()</code> is the same for all three threads—they are not separate processes. <code>pthread_create</code> only starts execution; <code>pthread_join</code> (in <code>run_child_engine</code>) waits for each worker to finish when shutting down. If two threads touched the same unsynchronized data, you would risk races; here shared <code>/proc</code> reads go through the mutex helpers you see on the Synchronization page.</p></div>
+                        <div class="detail-section"><h3>Thread entry points (synced with visualization)</h3><p class="code-sync-hint">The <strong>highlighted block</strong> matches the active thread lane on the right (T1 → T2 → T3, 5s per lane). The panel <strong>scrolls</strong> so you always see the code that corresponds to the pulsing lane.</p><pre class="os-process-code-pre" id="os-threads-code-scroll"><code><span class="code-step-block" data-code-phase="thread-monitor">// ─── process_monitor.cpp ─── Thread 1
 void* start_process_monitor(void* arg) {
     std::cout &lt;&lt; "[+] Process Monitor thread started (TID in PID: "
               &lt;&lt; getpid() &lt;&lt; ")" &lt;&lt; std::endl;
@@ -605,8 +717,7 @@ void* start_process_monitor(void* arg) {
     }
     return NULL;
 }
-
-// ─── behavior_detector.cpp ─── Thread 2
+</span><span class="code-step-block" data-code-phase="thread-behavior">// ─── behavior_detector.cpp ─── Thread 2
 void* start_behavior_detector(void* arg) {
     std::cout &lt;&lt; "[+] Behavior Detector thread started." &lt;&lt; std::endl;
     int last_process_cnt = get_process_count();
@@ -635,8 +746,7 @@ void* start_behavior_detector(void* arg) {
     }
     return NULL;
 }
-
-// ─── resource_monitor.cpp ─── Thread 3
+</span><span class="code-step-block" data-code-phase="thread-resource">// ─── resource_monitor.cpp ─── Thread 3
 void* start_resource_monitor(void* arg) {
     std::cout &lt;&lt; "[+] Resource Monitor thread started." &lt;&lt; std::endl;
     get_cpu_usage();  // prime the delta
@@ -660,11 +770,16 @@ void* start_resource_monitor(void* arg) {
         sleep(5);
     }
     return NULL;
-}</code></pre></div>
+}</span></code></pre></div>
                         <div class="detail-section"><h3>Files</h3><p><code>main.cpp</code>, <code>process_monitor.cpp</code>, <code>behavior_detector.cpp</code>, <code>resource_monitor.cpp</code></p></div>
                     </div>
                         </div>
                         <aside class="concept-viz-aside thread-viz-aside" aria-label="Thread execution visualization">
+                            <div class="res-viz-toolbar" role="group" aria-label="Animation controls">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-threads" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-threads">Stop</button>
+                                <span class="res-viz-state" id="viz-state-os-threads" aria-live="polite">Running</span>
+                            </div>
                             <div class="thread-viz-intro">
                                 <h3 class="thread-viz-title">Concurrent execution</h3>
                                 <p class="thread-viz-lead">Each lane mirrors the loop on the left: a short <strong>work</strong> burst (mutex, syscalls, logs), then blocking <strong>sleep(N)</strong>. Timings match the implementation.</p>
@@ -744,8 +859,8 @@ void* start_resource_monitor(void* arg) {
                         <div class="concept-detail-main">
                     <div class="concept-detail-hero"><div><h2>Synchronization (Mutex)</h2><p class="hero-sub">Critical Section Protection, Race Condition Prevention</p></div></div>
                     <div class="concept-detail-content">
-                        <div class="detail-section"><h3>How It Works</h3><p>A <code>pthread_mutex_t</code> guards access to /proc directory enumeration. Both process monitor and behavior detector threads acquire the lock before reading process data, preventing data races on the shared PID list.</p></div>
-                        <div class="detail-section"><h3>Source Code — process_monitor.cpp</h3><pre><code>// Global mutex — shared between all threads
+                        <div class="detail-section"><h3>How It Works</h3><p><code>get_all_pids()</code> walks <code>/proc</code> with <code>opendir</code>/<code>readdir</code>: the kernel can change directory contents while you read, so two threads doing that <strong>without</strong> coordination could see torn or inconsistent snapshots. A single <code>pthread_mutex_t proc_mut</code> makes <code>get_process_count()</code> and <code>get_all_pids_safe()</code> <strong>critical sections</strong>: lock → read → unlock. Only one thread holds the mutex at a time; the other blocks in <code>pthread_mutex_lock</code> (not spinning forever in this API). The raw helper stays unguarded so it can be called only from already-locked code paths—<strong>never</strong> expose it to concurrent callers without the same lock order everywhere (avoid deadlock by always taking <code>proc_mut</code> alone).</p><p class="detail-hint"><strong>Analogy:</strong> the mutex is a single bathroom key—only one thread “inside” <code>/proc</code> at a time. <code>get_all_pids_safe</code> copies the vector <em>while</em> holding the lock, then returns the copy so the detector can scan PIDs without holding the lock for the whole loop.</p></div>
+                        <div class="detail-section"><h3>Source code — process_monitor.cpp &amp; behavior_detector.cpp</h3><p class="code-sync-hint">The <strong>highlighted block</strong> follows the mutex story on the right (raw enumerate → monitor count → safe copy → detector use), 5s per step. The panel <strong>scrolls</strong> so the lock state and the code stay aligned.</p><pre class="os-process-code-pre" id="os-sync-code-scroll"><code><span class="code-step-block" data-code-phase="sync-raw">// Global mutex — shared between all threads
 pthread_mutex_t proc_mut = PTHREAD_MUTEX_INITIALIZER;
 
 // Raw /proc enumeration (NOT thread-safe)
@@ -770,23 +885,21 @@ std::vector&lt;int&gt; get_all_pids() {
     closedir(dir);
     return pids;
 }
-
-// Mutex-protected process count
+</span><span class="code-step-block" data-code-phase="sync-count">// Mutex-protected process count
 int get_process_count() {
     pthread_mutex_lock(&amp;proc_mut);
     int count = get_all_pids().size();
     pthread_mutex_unlock(&amp;proc_mut);
     return count;
 }
-
-// Mutex-protected PID list access (thread-safe)
+</span><span class="code-step-block" data-code-phase="sync-safe">// Mutex-protected PID list access (thread-safe)
 std::vector&lt;int&gt; get_all_pids_safe() {
     pthread_mutex_lock(&amp;proc_mut);
     std::vector&lt;int&gt; pids = get_all_pids();
     pthread_mutex_unlock(&amp;proc_mut);
     return pids;
-}</code></pre></div>
-                        <div class="detail-section"><h3>Usage in behavior_detector.cpp</h3><pre><code>// Uses mutex-protected variant to prevent race condition
+}
+</span><span class="code-step-block" data-code-phase="sync-use">// behavior_detector.cpp — mutex-protected snapshot
 auto pids = get_all_pids_safe();
 for (int p : pids) {
     std::string pname = get_process_name(p);
@@ -794,13 +907,18 @@ for (int p : pids) {
         send_event_to_backend("SUSPICIOUS_PROC",
             "Detected reverse shell: " + pname, p, pname, 3);
     }
-}</code></pre></div>
+}</span></code></pre></div>
                         <div class="detail-section"><h3>Files</h3><p><code>process_monitor.cpp</code>, <code>behavior_detector.cpp</code></p></div>
                     </div>
                         </div>
                         <aside class="concept-viz-aside thread-viz-aside" aria-label="Mutex visualization">
+                            <div class="res-viz-toolbar" role="group" aria-label="Animation controls">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-sync" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-sync">Stop</button>
+                                <span class="res-viz-state" id="viz-state-os-sync" aria-live="polite">Running</span>
+                            </div>
                             <h3 class="thread-viz-title">proc_mut</h3>
-                            <p class="thread-viz-lead">Only one thread owns <code>pthread_mutex_t</code> while walking <code>/proc</code>; the other spins until <strong>unlock</strong>.</p>
+                            <p class="thread-viz-lead">Only one thread owns <code>pthread_mutex_t</code> while walking <code>/proc</code>; the other blocks in <code>pthread_mutex_lock</code> until <strong>unlock</strong>. 🔒 means the lock is held; 🔓 means both threads are outside the critical section.</p>
                             <div class="viz-mutex-row">
                                 <div id="viz-mutex-thread-a" class="viz-thread-pill">Monitor<br>get_process_count</div>
                                 <div id="viz-mutex-lock" class="viz-mutex-lock">🔓</div>
@@ -818,13 +936,14 @@ for (int p : pids) {
                         <div class="concept-detail-main">
                     <div class="concept-detail-hero"><div><h2>Inter-Process Communication</h2><p class="hero-sub">Named Pipes (FIFO), Message Passing</p></div></div>
                     <div class="concept-detail-content">
-                        <div class="detail-section"><h3>How It Works</h3><p>Communication between components uses one named pipe path defined in <code>backend/ipc_config.py</code> (Windows: <code>backend/hidrs_events.pipe</code>; Linux: <code>/tmp/hidrs_events</code>, matching the C++ <code>open()</code> path). The C++ engine writes JSON with non-blocking I/O; the Python backend reads line-by-line; Red Team scripts append JSON lines.</p></div>
-                        <div class="detail-section"><h3>Single path — ipc_config.py</h3><pre><code># Used by main_backend.py and all red_team_py writers
+                        <div class="detail-section"><h3>How It Works</h3><p>All producers agree on <strong>one path</strong> from <code>ipc_config.py</code> so C++, Python, and Red Team scripts never write to different files. Events are <strong>newline-delimited JSON</strong> (one object per line) so the reader can call <code>readline()</code> and parse each payload independently. The C++ side opens with <code>O_NONBLOCK</code> so a slow consumer cannot <strong>block the detector thread</strong> indefinitely on <code>open</code>/<code>write</code>; if the pipe is not ready, the write fails fast and the engine returns. The backend typically opens for read in a long-lived loop; Red Team tools often <strong>append</strong> (<code>'a'</code>) like a log. On Windows the “pipe” may be a regular file the backend creates; on Linux a true FIFO (<code>mkfifo</code>) is common.</p><p class="detail-hint"><strong>Failure modes:</strong> if the backend is not running, the path may not exist yet—start <code>main_backend.py</code> first. Partial writes or invalid JSON lines will break parsing; keeping one JSON object per line avoids needing a streaming parser.</p></div>
+                        <div class="detail-section"><h3>IPC source (synced with pipe flow)</h3><p class="code-sync-hint">The <strong>highlighted block</strong> tracks the dot: <strong>config → C++ write → Python read loop → Red Team append</strong> (5s per hop). The panel <strong>scrolls</strong> to the active role in the pipeline.</p><pre class="os-process-code-pre" id="os-ipc-code-scroll"><code><span class="code-step-block" data-code-phase="ipc-config"># ipc_config.py — used by main_backend.py and red_team_py writers
 from ipc_config import PIPE_PATH, setup_named_pipe
 
 # PIPE_PATH → backend/hidrs_events.pipe (Windows) or /tmp/hidrs_events (POSIX)
-# setup_named_pipe() → regular file on Windows, os.mkfifo() on Linux/macOS</code></pre></div>
-                        <div class="detail-section"><h3>C++ Writer — behavior_detector.cpp</h3><pre><code>void send_event_to_backend(const std::string&amp; event_type,
+# setup_named_pipe() → regular file on Windows, os.mkfifo() on Linux/macOS
+</span><span class="code-step-block" data-code-phase="ipc-cpp">// behavior_detector.cpp — non-blocking write
+void send_event_to_backend(const std::string&amp; event_type,
     const std::string&amp; description, int pid,
     const std::string&amp; process_name, int severity) {
 
@@ -840,8 +959,9 @@ from ipc_config import PIPE_PATH, setup_named_pipe
 
     write(fifo, payload.c_str(), payload.length());
     close(fifo);
-}</code></pre></div>
-                        <div class="detail-section"><h3>Python Reader — main_backend.py</h3><pre><code>from ipc_config import PIPE_PATH, setup_named_pipe
+}
+</span><span class="code-step-block" data-code-phase="ipc-python"># main_backend.py — blocking readline loop
+from ipc_config import PIPE_PATH, setup_named_pipe
 
 def main():
     setup_named_pipe()
@@ -860,8 +980,9 @@ def main():
                     if line:
                         process_message(line)
         except KeyboardInterrupt:
-            break</code></pre></div>
-                        <div class="detail-section"><h3>Red Team Writer — login_simulator.py</h3><pre><code>sys.path.insert(0, os.path.join(BASE_DIR, 'backend'))
+            break
+</span><span class="code-step-block" data-code-phase="ipc-red"># login_simulator.py — append JSON lines
+sys.path.insert(0, os.path.join(BASE_DIR, 'backend'))
 from ipc_config import PIPE_PATH
 
 def send_to_blue_team(event_data):
@@ -869,12 +990,17 @@ def send_to_blue_team(event_data):
         print("[!] Pipe missing — start main_backend.py first (creates path).")
         return
     with open(PIPE_PATH, 'a') as f:
-        f.write(json.dumps(event_data) + "\n")</code></pre></div>
+        f.write(json.dumps(event_data) + "\n")</span></code></pre></div>
                         <div class="detail-section"><h3>Verify it works</h3><p>Terminal 1: <code>python backend/main_backend.py</code> · Terminal 2: <code>python backend/test_ipc_ping.py</code> — you should see <code>[BACKEND] Recv Event: IPC_TEST</code>. The dashboard polls <code>/api/ipc/status</code> (right panel).</p></div>
                         <div class="detail-section"><h3>Files</h3><p><code>backend/ipc_config.py</code>, <code>behavior_detector.cpp</code>, <code>main_backend.py</code>, <code>login_simulator.py</code>, <code>process_flood.py</code>, <code>file_tamper_simulator.py</code>, <code>backend/test_ipc_ping.py</code></p></div>
                     </div>
                         </div>
                         <aside class="concept-viz-aside thread-viz-aside" aria-label="FIFO flow">
+                            <div class="res-viz-toolbar" role="group" aria-label="Animation controls">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-ipc" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-ipc">Stop</button>
+                                <span class="res-viz-state" id="viz-state-os-ipc" aria-live="polite">Running</span>
+                            </div>
                             <h3 class="thread-viz-title">Named pipe</h3>
                             <p class="thread-viz-lead">C++ <strong>O_NONBLOCK</strong> write · Python blocking <strong>readline</strong> · Red Team appends JSON the same way.</p>
                             <div class="ipc-live-panel" id="ipc-live-panel">
@@ -902,12 +1028,11 @@ def send_to_blue_team(event_data):
                         <div class="concept-detail-main">
                     <div class="concept-detail-hero"><div><h2>Signal Handling</h2><p class="hero-sub">SIGINT, SIGTERM, Graceful Shutdown</p></div></div>
                     <div class="concept-detail-content">
-                        <div class="detail-section"><h3>How It Works</h3><p>Both parent and child register signal handlers. On Ctrl+C (SIGINT) or kill command (SIGTERM), the handler sets <code>running = 0</code> and forwards the signal to the child for coordinated shutdown. Uses <code>volatile sig_atomic_t</code> for async-signal-safety.</p></div>
-                        <div class="detail-section"><h3>Source Code — main.cpp</h3><pre><code>// Global flag — volatile sig_atomic_t is async-signal-safe
+                        <div class="detail-section"><h3>How It Works</h3><p>Signal handlers run in a restricted context: only <strong>async-signal-safe</strong> operations are guaranteed. A plain <code>bool</code> flag might be torn if read/written from a signal and a thread at once; <code>volatile sig_atomic_t</code> is the portable way to store a small “please stop” flag. The parent records <code>child_pid</code> after <code>fork</code> so <code>signal_handler</code> can <code>kill(child_pid, signum)</code>—forwarding the <strong>same signal</strong> lets the child run its own handler and clear <code>running</code> so pthread worker loops exit. Without that forward, the child might keep running after the parent decides to shut down. <code>SIGINT</code> (Ctrl+C) and <code>SIGTERM</code> are both hooked to the same handler for consistent cleanup.</p><p class="detail-hint"><strong>Contrast:</strong> the default for many signals is to terminate the process immediately. Installing a handler lets you set flags and notify children first. Avoid heavy work (heap allocation, locks) inside the handler—set <code>running=0</code> and let normal thread code finish the job.</p></div>
+                        <div class="detail-section"><h3>Source code — main.cpp</h3><p class="code-sync-hint">The <strong>highlighted block</strong> walks <strong>globals → parent handler → child handler → registration → end-to-end flow</strong> (5s each). The panel <strong>scrolls</strong> with the pulsing nodes on the right.</p><pre class="os-process-code-pre" id="os-signals-code-scroll"><code><span class="code-step-block" data-code-phase="sig-globals">// Global flag — volatile sig_atomic_t is async-signal-safe
 volatile sig_atomic_t running = 1;
 static pid_t child_pid = -1;
-
-// Parent signal handler — SIGINT (Ctrl+C) and SIGTERM
+</span><span class="code-step-block" data-code-phase="sig-parent">// Parent signal handler — SIGINT (Ctrl+C) and SIGTERM
 void signal_handler(int signum) {
     if (signum == SIGINT) {
         std::cout &lt;&lt; "\n[SIGNAL] Caught SIGINT (Ctrl+C), "
@@ -923,24 +1048,29 @@ void signal_handler(int signum) {
         kill(child_pid, signum);
     }
 }
-
-// Child signal handler — stops all worker threads
+</span><span class="code-step-block" data-code-phase="sig-child">// Child signal handler — stops all worker threads
 void child_signal_handler(int signum) {
     std::cout &lt;&lt; "[SIGNAL] Child process received signal "
               &lt;&lt; signum &lt;&lt; ", stopping threads..." &lt;&lt; std::endl;
     running = 0;
 }
-
-// Registration in main():
+</span><span class="code-step-block" data-code-phase="sig-register">// Registration in main():
 int main() {
     signal(SIGINT, signal_handler);   // Register SIGINT handler
     signal(SIGTERM, signal_handler);  // Register SIGTERM handler
     // ... supervision loop ...
-}</code></pre></div>
+}
+</span><span class="code-step-block" data-code-phase="sig-flow">// End-to-end: Ctrl+C or kill → parent handler sets running=0
+// and kill(child_pid, signum) → child handler → worker threads exit their loops</span></code></pre></div>
                         <div class="detail-section"><h3>File</h3><p><code>os_engine_cpp/src/main.cpp</code></p></div>
                     </div>
                         </div>
                         <aside class="concept-viz-aside thread-viz-aside" aria-label="Signal propagation">
+                            <div class="res-viz-toolbar" role="group" aria-label="Animation controls">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-signals" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-signals">Stop</button>
+                                <span class="res-viz-state" id="viz-state-os-signals" aria-live="polite">Running</span>
+                            </div>
                             <h3 class="thread-viz-title">Graceful shutdown</h3>
                             <p class="thread-viz-lead">Handlers use <code>volatile sig_atomic_t running</code>; parent forwards <strong>kill(child_pid, signum)</strong> so both processes exit cleanly.</p>
                             <div class="viz-sig-flow">
@@ -962,8 +1092,8 @@ int main() {
                         <div class="concept-detail-main">
                     <div class="concept-detail-hero"><div><h2>Resource Monitoring</h2><p class="hero-sub">CPU &amp; Memory Tracking via /proc</p></div></div>
                     <div class="concept-detail-content">
-                        <div class="detail-section"><h3>How It Works</h3><p>A dedicated thread reads <code>/proc/stat</code> for CPU usage (delta between samples) and <code>/proc/meminfo</code> for memory stats. Per-process data via <code>/proc/[pid]/stat</code>. Alerts when usage exceeds 90%.</p></div>
-                        <div class="detail-section"><h3>Source Code — resource_monitor.cpp (complete)</h3><pre><code>#include "resource_monitor.h"
+                        <div class="detail-section"><h3>How It Works</h3><p>A dedicated <strong>resource monitor</strong> thread (see <code>start_resource_monitor</code>) wakes every <strong>5 seconds</strong>, samples the kernel pseudo-filesystems, and logs CPU and memory percentages. <strong>CPU %</strong> is not read directly from the kernel: the code stores the previous jiffies from <code>/proc/stat</code>, compares the next sample, and turns <em>Δ busy time / Δ total time</em> into <code>usage_percent</code>. <strong>Memory %</strong> prefers <code>MemAvailable</code> (what the kernel thinks apps can allocate) over raw <code>MemFree</code>, then derives used memory vs <code>MemTotal</code>. <code>ProcessStats</code> and <code>get_process_stats(pid)</code> mirror optional per-process fields from <code>/proc/[pid]/stat</code> (utime, stime, RSS, thread count). When either percentage exceeds <strong>90%</strong>, the engine emits <code>HIGH_CPU</code> or <code>HIGH_MEMORY</code> through the same IPC path as other detectors.</p><p class="detail-hint"><strong>Reading the numbers:</strong> the first <code>get_cpu_usage()</code> call only primes <code>prev_*</code>—the <em>second</em> call produces a meaningful percentage. The dashboard gauges on the right are simulated for teaching clarity; on a real Linux host the same structs would reflect live <code>/proc</code> parses.</p></div>
+                        <div class="detail-section"><h3>Source code — resource_monitor.cpp (complete)</h3><p class="code-sync-hint">The <strong>highlighted block</strong> tracks the /proc pipeline on the right (stat → CpuUsage → meminfo → MemoryInfo → thread → alerts). The panels <strong>auto-scroll</strong> in sync with each 5s step; <strong>Stop</strong> freezes the animation and keeps both code panels aligned.</p><pre class="os-process-code-pre" id="os-resources-code-scroll"><code><span class="code-step-block" data-code-phase="res-cpu-read">#include "resource_monitor.h"
 #include &lt;fstream&gt;
 #include &lt;sstream&gt;
 #include &lt;iostream&gt;
@@ -972,7 +1102,7 @@ int main() {
 static unsigned long long prev_total = 0;
 static unsigned long long prev_idle = 0;
 
-// 8. Read CPU usage from /proc/stat
+// Read CPU jiffies from /proc/stat (first line)
 CpuUsage get_cpu_usage() {
     CpuUsage cpu = {0, 0, 0, 0, 0};
     std::ifstream stat_file("/proc/stat");
@@ -988,8 +1118,7 @@ CpuUsage get_cpu_usage() {
 
     cpu.user = user; cpu.nice = nice;
     cpu.system = system; cpu.idle = idle;
-
-    unsigned long long total_idle = idle + iowait;
+</span><span class="code-step-block" data-code-phase="res-cpu-delta">    unsigned long long total_idle = idle + iowait;
     unsigned long long total = user + nice + system + idle
         + iowait + irq + softirq + steal;
 
@@ -1003,8 +1132,7 @@ CpuUsage get_cpu_usage() {
     prev_total = total;
     return cpu;
 }
-
-// 8. Read memory info from /proc/meminfo
+</span><span class="code-step-block" data-code-phase="res-mem">// Read memory keys from /proc/meminfo
 MemoryInfo get_memory_info() {
     MemoryInfo mem = {0, 0, 0, 0, 0, 0.0};
     std::ifstream meminfo("/proc/meminfo");
@@ -1022,14 +1150,13 @@ MemoryInfo get_memory_info() {
         else if (key == "Buffers:")      mem.buffers_kb = value;
         else if (key == "Cached:")       mem.cached_kb = value;
     }
-    if (mem.total_kb &gt; 0) {
+</span><span class="code-step-block" data-code-phase="res-mem-pct">    if (mem.total_kb &gt; 0) {
         unsigned long used = mem.total_kb - mem.available_kb;
         mem.usage_percent = (double)used / (double)mem.total_kb * 100.0;
     }
     return mem;
 }
-
-// 8. Resource monitor thread — runs every 5 seconds
+</span><span class="code-step-block" data-code-phase="res-thread">// Resource monitor thread — sample every 5 seconds
 void* start_resource_monitor(void* arg) {
     std::cout &lt;&lt; "[+] Resource Monitor thread started." &lt;&lt; std::endl;
     get_cpu_usage();  // Prime the delta calculation
@@ -1044,8 +1171,7 @@ void* start_resource_monitor(void* arg) {
                   &lt;&lt; " (" &lt;&lt; (mem.total_kb - mem.available_kb) / 1024
                   &lt;&lt; "MB / " &lt;&lt; mem.total_kb / 1024 &lt;&lt; "MB)"
                   &lt;&lt; std::endl;
-
-        if (cpu.usage_percent &gt; 90.0) {
+</span><span class="code-step-block" data-code-phase="res-alert">        if (cpu.usage_percent &gt; 90.0) {
             send_event_to_backend("HIGH_CPU",
                 "CPU usage exceeded 90% threshold",
                 getpid(), "resource_monitor", 3);
@@ -1058,8 +1184,8 @@ void* start_resource_monitor(void* arg) {
         sleep(5);
     }
     return NULL;
-}</code></pre></div>
-                        <div class="detail-section"><h3>Header — resource_monitor.h</h3><pre><code>#ifndef RESOURCE_MONITOR_H
+}</span></code></pre></div>
+                        <div class="detail-section"><h3>Header — resource_monitor.h</h3><p class="code-sync-hint">These <strong>structs and prototypes</strong> are the contract the .cpp file implements. Each block <strong>highlights</strong> and the header <strong>auto-scrolls</strong> in sync with the same beam/progress steps on the right.</p><pre class="os-process-code-pre" id="os-resources-h-code-scroll"><code><span class="code-step-block" data-code-phase="res-cpu-read">#ifndef RESOURCE_MONITOR_H
 #define RESOURCE_MONITOR_H
 #include &lt;string&gt;
 
@@ -1067,14 +1193,14 @@ struct CpuUsage {
     unsigned long long user, nice, system, idle;
     double usage_percent;
 };
-
-struct MemoryInfo {
+</span><span class="code-step-block" data-code-phase="res-cpu-delta">CpuUsage get_cpu_usage();
+</span><span class="code-step-block" data-code-phase="res-mem">struct MemoryInfo {
     unsigned long total_kb, free_kb, available_kb;
     unsigned long buffers_kb, cached_kb;
     double usage_percent;
 };
-
-struct ProcessStats {
+</span><span class="code-step-block" data-code-phase="res-mem-pct">MemoryInfo get_memory_info();
+</span><span class="code-step-block" data-code-phase="res-thread">struct ProcessStats {
     int pid;
     std::string name;
     unsigned long utime, stime;
@@ -1083,23 +1209,31 @@ struct ProcessStats {
     int num_threads;
 };
 
-CpuUsage get_cpu_usage();
-MemoryInfo get_memory_info();
 ProcessStats get_process_stats(int pid);
 void* start_resource_monitor(void* arg);
-
-// From behavior_detector (used for alerting)
+</span><span class="code-step-block" data-code-phase="res-alert">// Declared for alerting (defined in behavior_detector.cpp)
 void send_event_to_backend(const std::string&amp; event_type,
     const std::string&amp; desc, int pid,
     const std::string&amp; pname, int severity);
 
-#endif</code></pre></div>
+#endif</span></code></pre></div>
                         <div class="detail-section"><h3>Files</h3><p><code>resource_monitor.cpp</code>, <code>resource_monitor.h</code></p></div>
                     </div>
                         </div>
                         <aside class="concept-viz-aside thread-viz-aside" aria-label="/proc resource sampling">
                             <h3 class="thread-viz-title">resource_monitor.h → runtime</h3>
-                            <p class="thread-viz-lead">Same structs as the header: <strong>CpuUsage</strong>, <strong>MemoryInfo</strong>, <strong>ProcessStats</strong> — filled from <code>/proc</code>, then thresholds call <code>send_event_to_backend</code>.</p>
+                            <p class="thread-viz-lead">The <strong>left column</strong> highlights matching code (both the .cpp and the .h auto-scroll in sync). This panel uses a <strong>progress rail + beam</strong> so you can see which /proc stage is active. Use <strong>Stop</strong> to freeze the loop; <strong>Start</strong> resumes from the same point.</p>
+                            <div class="res-viz-toolbar" role="group" aria-label="Resource pipeline animation">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-resources" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-resources">Stop</button>
+                                <span class="res-viz-state" id="viz-state-os-resources" aria-live="polite">Running</span>
+                            </div>
+                            <p class="res-viz-step-caption" id="res-viz-step-caption"></p>
+                            <div class="res-pipeline-anim" id="viz-res-pipeline-anim" data-phase="0">
+                                <div class="res-pipeline-rail" aria-hidden="true">
+                                    <div class="res-pipeline-progress-fill" id="viz-res-pipeline-fill"></div>
+                                    <div class="res-pipeline-beam" id="viz-res-pipeline-beam"></div>
+                                </div>
                             <div class="res-pipeline" id="viz-res-pipeline" aria-hidden="true">
                                 <span class="res-pipe-node" data-viz-res-pipe="0">/proc/stat</span>
                                 <span class="res-pipe-join">→</span>
@@ -1112,6 +1246,7 @@ void send_event_to_backend(const std::string&amp; event_type,
                                 <span class="res-pipe-node" data-viz-res-pipe="4">/proc/[pid]/stat</span>
                                 <span class="res-pipe-join">→</span>
                                 <span class="res-pipe-node" data-viz-res-pipe="5">send_event_to_backend</span>
+                            </div>
                             </div>
                             <div class="res-struct-row">
                                 <div class="res-mini-struct" data-viz-res-box="cpu">
@@ -1152,7 +1287,7 @@ void send_event_to_backend(const std::string&amp; event_type,
                 <section class="panel concept-detail-panel concept-detail-panel--split">
                     <div class="concept-detail-split">
                         <div class="concept-detail-main">
-                    <div class="panel-heading"><h2>Red Team Simulation</h2><span class="panel-caption">Attack simulation scripts</span></div>
+                    <div class="panel-heading"><h2>Red Team Simulation</h2></div>
                     <div class="red-team-grid" id="red-team-grid" role="list">
                         <div class="red-team-card" role="listitem" tabindex="0" data-rt="0" aria-label="Brute Force Login simulation"><h3>Brute Force Login</h3><p>Simulates failed SSH login attempts. Sends AUTH_FAILED events with MEDIUM severity.</p><code>login_simulator.py</code></div>
                         <div class="red-team-card" role="listitem" tabindex="0" data-rt="1" aria-label="Process Flood simulation"><h3>Process Flood</h3><p>Spawns multiple dummy processes to trigger process spike detection. HIGH severity.</p><code>process_flood.py</code></div>
@@ -1245,7 +1380,7 @@ void send_event_to_backend(const std::string&amp; event_type,
                 <section class="panel concept-detail-panel concept-detail-panel--split">
                     <div class="concept-detail-split">
                         <div class="concept-detail-main">
-                    <div class="panel-heading"><h2>Response Engine</h2><span class="panel-caption">Active defense mechanisms</span></div>
+                    <div class="panel-heading"><h2>Response Engine</h2></div>
                     <div class="response-info">
                         <div class="response-card"><h3>Active Defense</h3><p>When FSM reaches LOCKED state, <code>active_defense()</code> queries all processes linked to unresolved HIGH/CRITICAL alerts and terminates them via <code>os.kill(pid, SIGKILL)</code>.</p></div>
                         <div class="response-card"><h3>C++ Response Engine</h3><p>Direct process termination from OS engine using <code>kill(pid, SIGKILL)</code> in <code>response_engine.cpp</code> for immediate threat neutralization.</p></div>
@@ -1312,7 +1447,7 @@ void trigger_response(int pid) {
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="{{ url_for('static', filename='script.js', v='20260330o') }}"></script>
 </body>
 </html>
 

@@ -635,6 +635,10 @@ header {
     border: 1px solid rgba(60, 23, 23, 0.85);
     background: rgba(5, 2, 2, 0.65);
 }
+.thread-viz-lane.thread-viz-lane--code-focus {
+    border-color: rgba(0, 195, 255, 0.42);
+    box-shadow: 0 0 0 1px rgba(0, 195, 255, 0.18);
+}
 .thread-viz-lane-head {
     display: flex;
     align-items: flex-start;
@@ -801,11 +805,7 @@ header {
     border-radius: var(--radius-sm);
     border: 1px solid rgba(60, 23, 23, 0.85);
     background: rgba(0, 0, 0, 0.35);
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-.viz-proc-card.viz-highlight {
-    border-color: rgba(255, 77, 87, 0.45);
-    box-shadow: 0 0 14px rgba(255, 77, 87, 0.12);
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 .viz-proc-card .viz-label {
     font-size: 0.75rem;
@@ -826,6 +826,257 @@ header {
     font-weight: 700;
     color: var(--accent-blue);
     padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 77, 87, 0.35);
+    background: rgba(255, 47, 67, 0.08);
+    z-index: 2;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.viz-fork-join.viz-fork-join--pulse {
+    animation: viz-fork-pulse 0.9s ease-in-out infinite;
+    box-shadow: 0 0 18px rgba(255, 77, 87, 0.35);
+}
+@keyframes viz-fork-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+}
+
+/* Parent/child graph — high-visibility animation (Process Management page) */
+.viz-pc-wrap {
+    margin-top: 10px;
+}
+.viz-pc-phases {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.viz-pc-phase {
+    font-size: 0.62rem;
+    padding: 5px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(60, 23, 23, 0.75);
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--muted-text);
+    opacity: 0.45;
+    transition: opacity 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.viz-pc-phase strong { color: var(--accent-cyan); margin-right: 2px; }
+.viz-pc-wrap[data-phase="fork"] .viz-pc-phase[data-pc-phase="fork"],
+.viz-pc-wrap[data-phase="assign"] .viz-pc-phase[data-pc-phase="assign"],
+.viz-pc-wrap[data-phase="threads"] .viz-pc-phase[data-pc-phase="threads"],
+.viz-pc-wrap[data-phase="wait"] .viz-pc-phase[data-pc-phase="wait"],
+.viz-pc-wrap[data-phase="recovery"] .viz-pc-phase[data-pc-phase="recovery"],
+.viz-pc-wrap[data-phase="shutdown"] .viz-pc-phase[data-pc-phase="shutdown"] {
+    opacity: 1;
+    border-color: rgba(255, 77, 87, 0.55);
+    color: var(--text-bright);
+    box-shadow: 0 0 12px rgba(255, 77, 87, 0.12);
+}
+.viz-pc-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+}
+@media (min-width: 520px) {
+    .viz-pc-flow {
+        flex-direction: row;
+        align-items: center;
+    }
+}
+.viz-pc-connector {
+    position: relative;
+    flex: 0 0 auto;
+    min-height: 48px;
+    min-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+@media (min-width: 520px) {
+    .viz-pc-connector {
+        min-width: 72px;
+        min-height: 100px;
+        flex-direction: column;
+    }
+}
+.viz-pc-connector-line {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 4px;
+    height: 100%;
+    max-height: 120px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 77, 87, 0.15), rgba(0, 195, 255, 0.2));
+    overflow: hidden;
+}
+@media (min-width: 520px) {
+    .viz-pc-connector-line {
+        width: 100%;
+        max-width: 120px;
+        height: 4px;
+        max-height: none;
+        background: linear-gradient(90deg, rgba(255, 77, 87, 0.2), rgba(0, 195, 255, 0.25));
+    }
+}
+.viz-pc-connector-line::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 120, 100, 0.55),
+        rgba(0, 195, 255, 0.65),
+        transparent
+    );
+    animation: viz-pc-flow-shine 2.2s linear infinite;
+}
+@keyframes viz-pc-flow-shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+.viz-pc-packet {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #fff, #ff4d57);
+    box-shadow: 0 0 12px rgba(255, 77, 87, 0.8);
+    left: 50%;
+    top: 8%;
+    transform: translate(-50%, 0);
+    transition: top 0.12s linear, left 0.12s linear;
+    z-index: 3;
+    pointer-events: none;
+}
+@media (min-width: 520px) {
+    .viz-pc-packet {
+        top: 50%;
+        left: 8%;
+        transform: translate(0, -50%);
+    }
+}
+#viz-os-process-parent.viz-highlight {
+    transform: scale(1.02);
+    border-color: rgba(255, 120, 100, 0.55);
+    box-shadow: 0 0 22px rgba(255, 90, 70, 0.2);
+}
+#viz-os-process-child.viz-highlight {
+    transform: scale(1.02);
+    border-color: rgba(0, 195, 255, 0.5);
+    box-shadow: 0 0 22px rgba(0, 195, 255, 0.22);
+}
+#viz-os-process-child.viz-highlight .viz-pc-thread-dots span {
+    animation: viz-thread-blink 0.8s ease-in-out infinite;
+}
+#viz-os-process-child .viz-pc-thread-dots {
+    display: flex;
+    gap: 5px;
+    margin-top: 8px;
+}
+#viz-os-process-child .viz-pc-thread-dots span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(0, 195, 255, 0.35);
+    border: 1px solid rgba(0, 195, 255, 0.55);
+    opacity: 0.35;
+}
+#viz-os-process-child.viz-highlight .viz-pc-thread-dots span {
+    opacity: 1;
+}
+#viz-os-process-child.viz-highlight .viz-pc-thread-dots span:nth-child(1) { animation-delay: 0s; }
+#viz-os-process-child.viz-highlight .viz-pc-thread-dots span:nth-child(2) { animation-delay: 0.12s; }
+#viz-os-process-child.viz-highlight .viz-pc-thread-dots span:nth-child(3) { animation-delay: 0.24s; }
+#viz-os-process-child.viz-highlight .viz-pc-thread-dots span:nth-child(4) { animation-delay: 0.36s; }
+@keyframes viz-thread-blink {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.25); filter: brightness(1.35); }
+}
+
+/* Process page — readable explainer (synced to animation) */
+.detail-section--readable p {
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: var(--text-color);
+    margin: 0 0 12px;
+}
+.detail-hint {
+    margin-top: 10px !important;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px dashed rgba(255, 120, 100, 0.35);
+    background: rgba(0, 0, 0, 0.25);
+    font-size: 0.86rem !important;
+    line-height: 1.55 !important;
+    color: var(--muted-text) !important;
+}
+.os-concepts-readme {
+    margin: 0 0 18px;
+}
+.os-concepts-readme.detail-hint {
+    margin-top: 0 !important;
+}
+#page-os-process .viz-dynamic-caption {
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #9fd4ff;
+    font-family: inherit;
+}
+.viz-pc-explain {
+    margin-top: 16px;
+    padding: 14px 14px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(60, 23, 23, 0.85);
+    background: rgba(8, 3, 3, 0.65);
+}
+.viz-pc-explain-head {
+    margin-bottom: 8px;
+}
+.viz-pc-explain-kicker {
+    display: block;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(200, 160, 160, 0.65);
+    margin-bottom: 4px;
+}
+.viz-pc-explain-title {
+    margin: 0;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1.35;
+}
+.viz-pc-explain-lead {
+    margin: 0 0 10px;
+    font-size: 0.84rem;
+    line-height: 1.55;
+    color: var(--text-color);
+}
+.viz-pc-explain-list {
+    margin: 0 0 10px;
+    padding-left: 1.15rem;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: #d4c4c4;
+}
+.viz-pc-explain-list li {
+    margin-bottom: 6px;
+}
+.viz-pc-explain-list li::marker {
+    color: rgba(255, 120, 100, 0.75);
+}
+.viz-pc-explain-code {
+    margin: 0;
+    font-size: 0.72rem;
+    font-family: ui-monospace, 'Cascadia Code', monospace;
+    color: rgba(0, 195, 255, 0.85);
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /* Mutex */
@@ -1017,6 +1268,105 @@ header {
     transition: width 0.12s linear;
 }
 
+/* Resource page — toolbar + beam animation (replaces scroll-only feedback) */
+.res-viz-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-bottom: 6px;
+}
+.res-viz-btn {
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(60, 23, 23, 0.85);
+    background: rgba(0, 0, 0, 0.45);
+    color: var(--text-bright);
+    cursor: pointer;
+    transition: opacity 0.15s, border-color 0.15s, color 0.15s;
+}
+.res-viz-btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+}
+.res-viz-btn--start:not(:disabled) {
+    border-color: rgba(0, 195, 255, 0.42);
+    color: #9fdcff;
+}
+.res-viz-btn--stop:not(:disabled) {
+    border-color: rgba(255, 77, 87, 0.5);
+    color: #ffc4c4;
+}
+.res-viz-state {
+    font-size: 0.72rem;
+    color: var(--muted-text);
+}
+.res-viz-step-caption {
+    margin: 0 0 10px;
+    font-size: 0.68rem;
+    line-height: 1.45;
+    color: var(--accent-cyan);
+    font-family: ui-monospace, monospace;
+    min-height: 1.2em;
+}
+.res-pipeline-anim {
+    margin-bottom: 4px;
+}
+.res-pipeline-anim.res-pipeline-anim--paused .res-pipeline-beam {
+    opacity: 0.35;
+    filter: grayscale(0.4);
+}
+.res-pipeline-anim.res-pipeline-anim--paused .res-pipeline-progress-fill {
+    opacity: 0.65;
+}
+.res-pipeline-rail {
+    position: relative;
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(60, 23, 23, 0.65);
+    margin-bottom: 8px;
+    overflow: visible;
+}
+.res-pipeline-progress-fill {
+    height: 100%;
+    width: 16.666%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, rgba(255, 77, 87, 0.12), rgba(0, 195, 255, 0.38));
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.res-pipeline-beam {
+    position: absolute;
+    top: 50%;
+    left: 8.333%;
+    width: 12px;
+    height: 12px;
+    margin-top: -6px;
+    margin-left: -6px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.35), rgba(0, 195, 255, 0.5) 45%, transparent 72%);
+    box-shadow: 0 0 14px rgba(0, 195, 255, 0.55);
+    transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s;
+    pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    .res-pipeline-progress-fill,
+    .res-pipeline-beam {
+        transition: none;
+    }
+    .res-pipe-node.res-node-active {
+        animation: none !important;
+    }
+}
+
+/* Global pause mode for OS concept animations/cards */
+.os-viz-paused * {
+    animation-play-state: paused !important;
+}
+
 /* Resource page — header structs + pipeline */
 .res-gauges-heading {
     margin: 14px 0 8px;
@@ -1051,6 +1401,17 @@ header {
     border-color: rgba(255, 77, 87, 0.45);
     background: rgba(255, 77, 87, 0.12);
     box-shadow: 0 0 12px rgba(255, 47, 67, 0.12);
+    animation: res-node-glow 1.15s ease-in-out infinite;
+}
+@keyframes res-node-glow {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(255, 47, 67, 0.14);
+        border-color: rgba(255, 77, 87, 0.45);
+    }
+    50% {
+        box-shadow: 0 0 18px rgba(0, 195, 255, 0.32);
+        border-color: rgba(0, 195, 255, 0.35);
+    }
 }
 .res-pipe-join {
     color: rgba(160, 120, 120, 0.55);
@@ -1154,6 +1515,31 @@ header {
     font-size: 0.82rem; line-height: 1.5;
 }
 .detail-section code { color: var(--accent-cyan); font-family: 'Cascadia Code', 'Fira Code', monospace; }
+
+/* Process Management — source follows animation step */
+.code-sync-hint {
+    margin: 0 0 10px;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--muted-text);
+}
+.detail-section pre.os-process-code-pre {
+    max-height: min(52vh, 520px);
+    overflow-y: auto;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+}
+.code-step-block {
+    display: block;
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin: 4px -10px;
+    transition: background 0.22s, box-shadow 0.22s;
+}
+.code-step-block.is-active {
+    background: rgba(0, 195, 255, 0.14);
+    box-shadow: inset 0 0 0 1px rgba(0, 195, 255, 0.5);
+}
 
 /* ═══ RED TEAM ════════════════════════════════════════════════════════════ */
 .red-team-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
@@ -1929,6 +2315,63 @@ header {
 
 /* ═══ SIEM ALERTS TABLE ════════════════════════════════════════════════ */
 .table-responsive { overflow-x: auto; margin-top: 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+
+.table-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+}
+.table-filters input {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 0.82rem;
+}
+.table-filters input:focus {
+    outline: none;
+    border-color: rgba(255, 120, 120, 0.55);
+    box-shadow: 0 0 0 1px rgba(255, 90, 90, 0.25);
+}
+.filter-clear-btn {
+    background: rgba(255, 77, 87, 0.16);
+    color: #ffd6d6;
+    border: 1px solid rgba(255, 77, 87, 0.45);
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.filter-clear-btn:hover {
+    background: rgba(255, 77, 87, 0.24);
+}
+.filter-export-btn {
+    background: rgba(0, 195, 255, 0.14);
+    color: #d9f6ff;
+    border: 1px solid rgba(0, 195, 255, 0.42);
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.filter-export-btn:hover { background: rgba(0, 195, 255, 0.22); }
+.quick-chip-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.quick-chip-btn {
+    background: rgba(255,255,255,0.06);
+    color: var(--text-color);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+.quick-chip-btn:hover { border-color: rgba(255, 120, 120, 0.5); }
 
 .alerts-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
 .alerts-table thead { background: rgba(255,255,255,0.02); color: #888; text-transform: none; }

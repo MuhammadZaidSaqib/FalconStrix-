@@ -56,6 +56,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const pageTitles = {
         'dashboard': 'Dashboard',
         'alerts': 'Live Alerts',
+        'resolved-cases': 'Resolved Cases Audit',
+        'terminated-processes': 'Terminated Processes Audit',
         'events': 'Events Log',
         'fsm': 'FSM State Machine',
         'os-concepts': 'OS Concepts Overview',
@@ -76,6 +78,85 @@ document.addEventListener("DOMContentLoaded", () => {
     const vizOsProcessCaption = document.getElementById('viz-os-process-caption');
     const vizOsProcessParent = document.getElementById('viz-os-process-parent');
     const vizOsProcessChild = document.getElementById('viz-os-process-child');
+    const vizOsProcessGraph = document.getElementById('viz-os-process-graph');
+    const vizOsProcessPacket = document.getElementById('viz-os-process-packet');
+    const vizOsProcessForkLabel = document.getElementById('viz-os-process-fork-label');
+    const vizOsProcessExplainTitle = document.getElementById('viz-os-process-phase-title');
+    const vizOsProcessExplainLead = document.getElementById('viz-os-process-phase-lead');
+    const vizOsProcessExplainBullets = document.getElementById('viz-os-process-phase-bullets');
+    const vizOsProcessCodeRef = document.getElementById('viz-os-process-code-ref');
+
+    const escapeHtmlOs = (s) =>
+        String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/"/g, '&quot;');
+
+    /** Long-form copy for Process Management page — keys match data-phase on #viz-os-process-graph */
+    const OS_PROCESS_PHASE_COPY = {
+        fork: {
+            title: 'Step 1 — fork() creates the parent/child split',
+            lead: 'The kernel copies the process: after this line, two processes exist, both about to test the value of pid.',
+            bullets: [
+                'If fork() fails (pid < 0), main() prints an error and exits — no child is created.',
+                'In the child branch, pid == 0. That process calls run_child_engine() and never executes the parent’s waitpid() code.',
+                'In the parent branch, pid is the new child’s process ID. Only the parent remembers this PID in child_pid.',
+            ],
+            codeRef: 'main.cpp → pid_t pid = fork();',
+        },
+        assign: {
+            title: 'Step 2 — Parent records the child; child starts work',
+            lead: 'The parent sets child_pid = pid so signal_handler can forward SIGINT/SIGTERM to the child. The child begins run_child_engine().',
+            bullets: [
+                'child_pid is global so the async signal handler can call kill(child_pid, signum) during shutdown.',
+                'The child installs child_signal_handler for SIGINT/SIGTERM and sets running = 0 when stopping.',
+                'The moving dot crossing “fork()” is a visual metaphor for control moving from one process to the other.',
+            ],
+            codeRef: 'Parent: child_pid = pid; Child: run_child_engine();',
+        },
+        threads: {
+            title: 'Step 3 — Four pthread workers inside the child',
+            lead: 'run_child_engine() passes the same running flag pointer to every thread so they can exit cleanly when signaled.',
+            bullets: [
+                'start_process_monitor — scans /proc, emits events.',
+                'start_behavior_detector — patterns, load/memory checks.',
+                'start_resource_monitor — CPU/memory sampling.',
+                'start_response_engine — reads command FIFO, can SIGKILL targets.',
+                'pthread_join waits for all four to finish before the child exits.',
+            ],
+            codeRef: 'run_child_engine() → pthread_create ×4, pthread_join ×4',
+        },
+        wait: {
+            title: 'Step 4 — Parent blocks in waitpid()',
+            lead: 'The parent does nothing else until the child process exits. This reaps the child and fills status (no zombie if you always wait).',
+            bullets: [
+                'waitpid(pid, &status, 0) is blocking: the parent is not spinning in a busy loop.',
+                'While waiting, the child’s four threads keep running their loops until running becomes 0.',
+                'If the child exits normally, the parent will read that outcome in the next step.',
+            ],
+            codeRef: 'Parent: waitpid(pid, &status, 0);',
+        },
+        recovery: {
+            title: 'Step 5 — Read exit status; restart or stop',
+            lead: 'Macros tell you how the child ended. If the engine should keep going, the parent sleeps 2 seconds and forks a fresh child.',
+            bullets: [
+                'WIFEXITED(status) + WEXITSTATUS(status) == 0 → clean exit; parent breaks out of while(running) in this implementation.',
+                'Non-zero exit or WIFSIGNALED(status) while still “running” → log, sleep(2), continue → new fork().',
+                'This is the supervision / fault-tolerance loop you see in the source.',
+            ],
+            codeRef: 'WIFEXITED / WEXITSTATUS / WIFSIGNALED / WTERMSIG → sleep(2) → continue',
+        },
+        shutdown: {
+            title: 'Step 6 — Signals shut down parent and child together',
+            lead: 'signal_handler sets running = 0, then forwards the signal to the child so both sides stop. waitpid then returns and the parent exits the loop.',
+            bullets: [
+                'volatile sig_atomic_t running is safe to set from a signal handler.',
+                'kill(child_pid, signum) asks the child to run its handler and clear running for threads.',
+                'After waitpid returns, if !running the parent skips restart and prints shutdown.',
+            ],
+            codeRef: 'signal_handler → running=0; kill(child_pid, signum);',
+        },
+    };
     const vizMutexCaption = document.getElementById('viz-os-sync-caption');
     const vizMutexA = document.getElementById('viz-mutex-thread-a');
     const vizMutexB = document.getElementById('viz-mutex-thread-b');
@@ -90,6 +171,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const vizResMemLabel = document.getElementById('viz-res-mem-label');
     const vizResCaption = document.getElementById('viz-os-resources-caption');
     const vizResPipeNodes = document.querySelectorAll('[data-viz-res-pipe]');
+    const vizResPipelineAnim = document.getElementById('viz-res-pipeline-anim');
+    const vizResPipelineFill = document.getElementById('viz-res-pipeline-fill');
+    const vizResPipelineBeam = document.getElementById('viz-res-pipeline-beam');
+    const resVizStepCaption = document.getElementById('res-viz-step-caption');
     const vizResBoxes = document.querySelectorAll('[data-viz-res-box]');
     const vizResAlertStrip = document.getElementById('viz-res-alert-strip');
     const vizResCpuFields = document.getElementById('viz-res-cpu-fields');
@@ -117,6 +202,33 @@ document.addEventListener("DOMContentLoaded", () => {
     const rtNextBtn = document.getElementById('rt-next-btn');
     const rtResetBtn = document.getElementById('rt-reset-btn');
     const rtStepHint = document.getElementById('rt-step-hint');
+    const resolvedCasesTable = document.getElementById('resolved-cases-table');
+    const terminatedProcessesTable = document.getElementById('terminated-processes-table');
+    const resolvedFilterCaseId = document.getElementById('resolved-filter-case-id');
+    const resolvedFilterText = document.getElementById('resolved-filter-text');
+    const resolvedFilterPid = document.getElementById('resolved-filter-pid');
+    const resolvedFilterFrom = document.getElementById('resolved-filter-from');
+    const resolvedFilterTo = document.getElementById('resolved-filter-to');
+    const resolvedFilterClear = document.getElementById('resolved-filter-clear');
+    const resolvedChipToday = document.getElementById('resolved-chip-today');
+    const resolvedChip24h = document.getElementById('resolved-chip-24h');
+    const resolvedChip7d = document.getElementById('resolved-chip-7d');
+    const resolvedExportCsv = document.getElementById('resolved-export-csv');
+    const terminatedFilterUser = document.getElementById('terminated-filter-user');
+    const terminatedFilterPid = document.getElementById('terminated-filter-pid');
+    const terminatedFilterText = document.getElementById('terminated-filter-text');
+    const terminatedFilterFrom = document.getElementById('terminated-filter-from');
+    const terminatedFilterTo = document.getElementById('terminated-filter-to');
+    const terminatedFilterClear = document.getElementById('terminated-filter-clear');
+    const terminatedChipToday = document.getElementById('terminated-chip-today');
+    const terminatedChip24h = document.getElementById('terminated-chip-24h');
+    const terminatedChip7d = document.getElementById('terminated-chip-7d');
+    const terminatedExportCsv = document.getElementById('terminated-export-csv');
+
+    let resolvedCasesAll = [];
+    let terminatedProcessesAll = [];
+    let resolvedCasesFiltered = [];
+    let terminatedProcessesFiltered = [];
 
     const RT_SCENARIOS = [
         {
@@ -292,9 +404,55 @@ document.addEventListener("DOMContentLoaded", () => {
     if (rtNextBtn) rtNextBtn.addEventListener('click', rtOnNext);
     if (rtResetBtn) rtResetBtn.addEventListener('click', rtOnReset);
 
+    // Start/Stop controls for OS concept animations
+    const conceptPages = ['os-process', 'os-threads', 'os-sync', 'os-ipc', 'os-signals', 'os-resources'];
+    conceptPages.forEach((pageName) => {
+        const startBtn = document.getElementById(`viz-btn-start-${pageName}`);
+        const stopBtn = document.getElementById(`viz-btn-stop-${pageName}`);
+        if (startBtn) {
+            startBtn.addEventListener('click', () => {
+                if (conceptVizPage === pageName) resumeResourcesViz();
+            });
+        }
+        if (stopBtn) {
+            stopBtn.addEventListener('click', () => {
+                if (conceptVizPage === pageName) pauseResourcesViz();
+            });
+        }
+    });
+
     let conceptVizRaf = null;
     let conceptVizT0 = 0;
     let conceptVizPage = null;
+    let conceptVizPaused = false;
+    let conceptVizFrozenElapsed = 0;
+    const lastConceptCodePhase = {};
+
+    function syncConceptCodeHighlight(scrollId, phase) {
+        if (!scrollId || !phase) return;
+        const pre = document.getElementById(scrollId);
+        if (!pre) return;
+        pre.querySelectorAll('.code-step-block[data-code-phase]').forEach((el) => {
+            el.classList.toggle('is-active', el.getAttribute('data-code-phase') === phase);
+        });
+        if (lastConceptCodePhase[scrollId] === phase) return;
+        lastConceptCodePhase[scrollId] = phase;
+        const active = pre.querySelector(`.code-step-block[data-code-phase="${phase}"]`);
+        if (active) {
+            requestAnimationFrame(() => {
+                active.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            });
+        }
+    }
+
+    const CONCEPT_SCROLL_BY_PAGE = {
+        'os-process': 'os-process-code-scroll',
+        'os-threads': 'os-threads-code-scroll',
+        'os-sync': 'os-sync-code-scroll',
+        'os-ipc': 'os-ipc-code-scroll',
+        'os-signals': 'os-signals-code-scroll',
+        'os-resources': 'os-resources-code-scroll',
+    };
 
     const VIZ_PAGES = new Set([
         'os-concepts',
@@ -308,12 +466,67 @@ document.addEventListener("DOMContentLoaded", () => {
         'response'
     ]);
 
+    // OS concept pages with Start/Stop controls
+    const CONCEPT_CONTROL_PAGES = new Set([
+        'os-process',
+        'os-threads',
+        'os-sync',
+        'os-ipc',
+        'os-signals',
+        'os-resources',
+    ]);
+
     function stopConceptViz() {
         if (conceptVizRaf != null) {
             cancelAnimationFrame(conceptVizRaf);
             conceptVizRaf = null;
         }
         conceptVizPage = null;
+        conceptVizPaused = false;
+        conceptVizFrozenElapsed = 0;
+        updateResVizToolbar();
+        document.body.classList.remove('os-viz-paused');
+    }
+
+    function updateResVizToolbar() {
+        CONCEPT_CONTROL_PAGES.forEach((pageName) => {
+            const startBtn = document.getElementById(`viz-btn-start-${pageName}`);
+            const stopBtn = document.getElementById(`viz-btn-stop-${pageName}`);
+            const stateEl = document.getElementById(`viz-state-${pageName}`);
+            const isActive = conceptVizPage === pageName;
+            const running = isActive && !conceptVizPaused;
+
+            if (startBtn) startBtn.disabled = !isActive || running; // enable only while paused
+            if (stopBtn) stopBtn.disabled = !isActive || !running; // enable only while running
+            if (stateEl) stateEl.textContent = isActive
+                ? (conceptVizPaused ? 'Paused' : 'Running')
+                : '';
+        });
+    }
+
+    function pauseResourcesViz() {
+        if (!CONCEPT_CONTROL_PAGES.has(conceptVizPage) || conceptVizPaused) return;
+        conceptVizPaused = true;
+        conceptVizFrozenElapsed = performance.now() - conceptVizT0;
+        if (conceptVizRaf != null) {
+            cancelAnimationFrame(conceptVizRaf);
+            conceptVizRaf = null;
+        }
+        if (vizResPipelineAnim) vizResPipelineAnim.classList.add('res-pipeline-anim--paused');
+        document.body.classList.add('os-viz-paused');
+        updateResVizToolbar();
+    }
+
+    function resumeResourcesViz() {
+        if (!CONCEPT_CONTROL_PAGES.has(conceptVizPage) || !conceptVizPaused) return;
+        conceptVizPaused = false;
+        conceptVizT0 = performance.now() - conceptVizFrozenElapsed;
+        if (vizResPipelineAnim) vizResPipelineAnim.classList.remove('res-pipeline-anim--paused');
+        if (conceptVizRaf == null) {
+            conceptVizRaf = requestAnimationFrame(conceptVizFrame);
+        }
+        document.body.classList.remove('os-viz-paused');
+        updateResVizToolbar();
     }
 
     function setLaneVisual(lane, workScale, sleepScale) {
@@ -459,75 +672,159 @@ document.addEventListener("DOMContentLoaded", () => {
                 setLaneVisual(laneResource, 0, sleepP);
             }
         }
+
+        const tStep = 5000;
+        const ti = Math.floor(elapsed / tStep) % 3;
+        const threadPhases = ['thread-monitor', 'thread-behavior', 'thread-resource'];
+        syncConceptCodeHighlight('os-threads-code-scroll', threadPhases[ti]);
+        if (laneMonitor) laneMonitor.classList.toggle('thread-viz-lane--code-focus', ti === 0);
+        if (laneBehavior) laneBehavior.classList.toggle('thread-viz-lane--code-focus', ti === 1);
+        if (laneResource) laneResource.classList.toggle('thread-viz-lane--code-focus', ti === 2);
     }
 
     function updateOsProcessViz(elapsed) {
-        const p = 12000;
+        /* Six equal-length steps; full loop 30s (5s per step) for even reading time */
+        const STEP_MS = 5000;
+        const p = STEP_MS * 6;
+        const T1 = STEP_MS * 1;
+        const T2 = STEP_MS * 2;
+        const T3 = STEP_MS * 3;
+        const T4 = STEP_MS * 4;
+        const T5 = STEP_MS * 5;
         const t = elapsed % p;
-        if (vizOsProcessParent) vizOsProcessParent.classList.toggle('viz-highlight', t < 2500 || (t > 9000 && t < 10500));
-        if (vizOsProcessChild) vizOsProcessChild.classList.toggle('viz-highlight', t >= 2500 && t < 9000);
+        let phase = 'fork';
+        if (t < T1) phase = 'fork';
+        else if (t < T2) phase = 'assign';
+        else if (t < T3) phase = 'threads';
+        else if (t < T4) phase = 'wait';
+        else if (t < T5) phase = 'recovery';
+        else phase = 'shutdown';
+
+        if (vizOsProcessGraph) vizOsProcessGraph.dataset.phase = phase;
+
+        const parentLit = t < T2 || (t >= T3 && t < p);
+        const childLit = t >= T2 && t < T4;
+        if (vizOsProcessParent) vizOsProcessParent.classList.toggle('viz-highlight', parentLit);
+        if (vizOsProcessChild) vizOsProcessChild.classList.toggle('viz-highlight', childLit);
+
+        if (vizOsProcessForkLabel) {
+            vizOsProcessForkLabel.classList.toggle('viz-fork-join--pulse', phase === 'fork' || phase === 'assign');
+        }
+
+        if (vizOsProcessPacket) {
+            /* Dot centered in each equal segment: (2k-1)/12 for k = 1..6 */
+            const phaseU = {
+                fork: 1 / 12,
+                assign: 3 / 12,
+                threads: 5 / 12,
+                wait: 7 / 12,
+                recovery: 9 / 12,
+                shutdown: 11 / 12,
+            };
+            const lo = 12;
+            const hi = 88;
+            const frac = phaseU[phase] ?? 0.5;
+            const pos = lo + frac * (hi - lo);
+            const wide = typeof window !== 'undefined' && window.innerWidth >= 520;
+            if (wide) {
+                vizOsProcessPacket.style.left = `${pos}%`;
+                vizOsProcessPacket.style.top = '50%';
+                vizOsProcessPacket.style.transform = 'translate(-50%, -50%)';
+            } else {
+                vizOsProcessPacket.style.top = `${pos}%`;
+                vizOsProcessPacket.style.left = '50%';
+                vizOsProcessPacket.style.transform = 'translate(-50%, -50%)';
+            }
+        }
+
         let cap = '';
-        if (t < 1500) cap = 'fork() — duplicate process, child PID assigned';
-        else if (t < 2500) cap = 'child: run_child_engine() · parent: child_pid = pid';
-        else if (t < 8000) cap = 'child: 3× pthread worker loops · parent: waitpid(pid, &status, 0) blocking';
-        else if (t < 9000) cap = 'child _exit(0) · parent reaps with waitpid (no zombie)';
-        else if (t < 10500) cap = 'alternate path: WIFEXITED / WIFSIGNALED → sleep(2) → restart';
-        else cap = 'running flag checked → supervision loop continues';
+        if (t < T1) cap = '① fork() — kernel duplicates parent; returns 0 in child, pid in parent';
+        else if (t < T2) cap = '② parent: child_pid = pid; child: run_child_engine() starts';
+        else if (t < T3) cap = '③ child: pthread_create ×4 (monitor, behavior, resource, response) + shared running flag';
+        else if (t < T4) cap = '④ parent: waitpid(pid,&status,0) blocks — child threads loop until running=0';
+        else if (t < T5) cap = '⑤ WIFEXITED / WIFSIGNALED → sleep(2) → continue (restart) or break on clean exit';
+        else cap = '⑥ signal_handler: running=0 → kill(child_pid, signum) — coordinated shutdown';
         if (vizOsProcessCaption) vizOsProcessCaption.textContent = cap;
+
+        const story = OS_PROCESS_PHASE_COPY[phase];
+        if (story) {
+            if (vizOsProcessExplainTitle) vizOsProcessExplainTitle.textContent = story.title;
+            if (vizOsProcessExplainLead) vizOsProcessExplainLead.textContent = story.lead;
+            if (vizOsProcessExplainBullets) {
+                vizOsProcessExplainBullets.innerHTML = story.bullets
+                    .map((b) => `<li>${escapeHtmlOs(b)}</li>`)
+                    .join('');
+            }
+            if (vizOsProcessCodeRef) {
+                vizOsProcessCodeRef.textContent = story.codeRef ? `Code reference: ${story.codeRef}` : '';
+            }
+        }
+
+        syncConceptCodeHighlight('os-process-code-scroll', phase);
     }
 
     function updateOsSyncViz(elapsed) {
-        const p = 5000;
+        const STEP = 5000;
+        const p = STEP * 4;
         const t = elapsed % p;
+        const phase = Math.min(3, Math.floor(t / STEP));
+        const codePhases = ['sync-raw', 'sync-count', 'sync-safe', 'sync-use'];
+        syncConceptCodeHighlight('os-sync-code-scroll', codePhases[phase]);
         if (!vizMutexA || !vizMutexB || !vizMutexLock) return;
-        let phase = 0;
-        if (t < 1200) phase = 0;
-        else if (t < 2600) phase = 1;
-        else if (t < 4000) phase = 2;
-        else phase = 3;
         vizMutexA.classList.toggle('viz-cs', phase === 1);
-        vizMutexB.classList.toggle('viz-cs', phase === 3);
-        vizMutexLock.classList.toggle('locked', phase === 1 || phase === 3);
-        vizMutexLock.textContent = phase === 1 || phase === 3 ? '🔒' : '🔓';
+        vizMutexB.classList.toggle('viz-cs', phase === 2);
+        vizMutexLock.classList.toggle('locked', phase === 1 || phase === 2);
+        vizMutexLock.textContent = phase === 1 || phase === 2 ? '🔒' : '🔓';
         const lines = [
-            'pthread_mutex_lock(&proc_mut) — Thread A enters critical section',
-            'enumerate /proc via get_all_pids() — count PIDs',
-            'pthread_mutex_unlock(&proc_mut) — release for thread B',
-            'Thread B: lock → get_all_pids_safe() copy → unlock'
+            'Raw get_all_pids(): walk /proc (not thread-safe; mutex protects callers)',
+            'get_process_count(): lock → get_all_pids().size() → unlock (monitor thread)',
+            'get_all_pids_safe(): lock → copy vector → unlock (detector thread)',
+            'behavior_detector.cpp: get_all_pids_safe() then scan cmdlines for nc / ncat / netcat',
         ];
         if (vizMutexCaption) vizMutexCaption.textContent = lines[phase];
     }
 
     function updateOsIpcViz(elapsed) {
-        const p = 3500;
-        const w = p * 0.35;
+        const STEP = 5000;
+        const p = STEP * 4;
         const t = elapsed % p;
-        const pos = Math.min(1, Math.max(0, t / w));
+        const phase = Math.min(3, Math.floor(t / STEP));
+        const codePhases = ['ipc-config', 'ipc-cpp', 'ipc-python', 'ipc-red'];
+        syncConceptCodeHighlight('os-ipc-code-scroll', codePhases[phase]);
+        const dotPos = [0.08, 0.38, 0.62, 0.92][phase];
         if (vizIpcDot) {
-            vizIpcDot.style.left = `${pos * 100}%`;
+            vizIpcDot.style.left = `${dotPos * 100}%`;
         }
-        if (vizIpcCaption) {
-            const inFlight = t < w * 0.92;
-            vizIpcCaption.textContent = inFlight
-                ? 'C++ write() JSON line → FIFO buffer → Python readline()'
-                : 'Backend: process_message(line) → DB / Socket.IO';
-        }
+        const ipcCaps = [
+            'ipc_config.py — PIPE_PATH + setup_named_pipe() (FIFO or Windows file)',
+            'C++ send_event_to_backend() — open(O_NONBLOCK) · write JSON line · close',
+            'Python main_backend — open(PIPE_PATH) · readline() loop · process_message()',
+            'Red Team — append JSON to same PIPE_PATH (login_simulator pattern)',
+        ];
+        if (vizIpcCaption) vizIpcCaption.textContent = ipcCaps[phase];
     }
 
     function updateOsSignalsViz(elapsed) {
-        const p = 6000;
+        const STEP = 5000;
+        const p = STEP * 5;
         const t = elapsed % p;
+        const phase = Math.min(4, Math.floor(t / STEP));
+        const codePhases = ['sig-globals', 'sig-parent', 'sig-child', 'sig-register', 'sig-flow'];
+        syncConceptCodeHighlight('os-signals-code-scroll', codePhases[phase]);
         if (vizSigCaption) {
-            if (t < 1200) vizSigCaption.textContent = 'Idle: signal(SIGINT/SIGTERM, handler) registered';
-            else if (t < 2800) vizSigCaption.textContent = 'User: Ctrl+C → SIGINT to parent';
-            else if (t < 4200) vizSigCaption.textContent = 'Parent: running=0 · kill(child_pid, signum)';
-            else if (t < 5400) vizSigCaption.textContent = 'Child: SIGINT handler · running=0 · threads stop';
-            else vizSigCaption.textContent = 'volatile sig_atomic_t — async-signal-safe flag';
+            const caps = [
+                'Global state: volatile sig_atomic_t running · static child_pid for forward',
+                'Parent signal_handler: set running=0 · kill(child_pid, signum)',
+                'Child child_signal_handler: running=0 so pthread workers exit loops',
+                'Registration: signal(SIGINT/SIGTERM, handler) in main()',
+                'Flow: Ctrl+C → parent handler → child receives same signal → clean shutdown',
+            ];
+            vizSigCaption.textContent = caps[phase];
         }
         if (vizSigNodes.length >= 3) {
-            vizSigNodes[0].classList.toggle('viz-pulse', t >= 1200 && t < 2800);
-            vizSigNodes[1].classList.toggle('viz-pulse', t >= 2800 && t < 4200);
-            vizSigNodes[2].classList.toggle('viz-pulse', t >= 4200 && t < 5600);
+            vizSigNodes[0].classList.toggle('viz-pulse', phase === 3 || phase === 4);
+            vizSigNodes[1].classList.toggle('viz-pulse', phase === 1 || phase === 4);
+            vizSigNodes[2].classList.toggle('viz-pulse', phase === 2 || phase === 4);
         }
     }
 
@@ -541,7 +838,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (vizResCpuLabel) vizResCpuLabel.textContent = `${c.toFixed(1)}%`;
         if (vizResMemLabel) vizResMemLabel.textContent = `${m.toFixed(1)}%`;
 
-        const phase = Math.floor(elapsed / 720) % 6;
+        const STEP = 5000;
+        const phase = Math.floor(elapsed / STEP) % 6;
+        const resCodePhases = ['res-cpu-read', 'res-cpu-delta', 'res-mem', 'res-mem-pct', 'res-thread', 'res-alert'];
+        const rk = resCodePhases[phase];
+        syncConceptCodeHighlight('os-resources-code-scroll', rk);
+        syncConceptCodeHighlight('os-resources-h-code-scroll', rk);
         vizResPipeNodes.forEach((node) => {
             const i = parseInt(node.getAttribute('data-viz-res-pipe'), 10);
             node.classList.toggle('res-node-active', i === phase);
@@ -573,15 +875,37 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const captions = [
-            '[RES] parse /proc/stat line 1 → fill CpuUsage jiffies',
-            '[RES] diff vs prev sample → cpu.usage_percent',
-            '[RES] scan /proc/meminfo keys → MemoryInfo fields',
-            '[RES] MemTotal − MemAvailable → mem.usage_percent',
-            '[RES] optional get_process_stats(pid) → /proc/[pid]/stat',
-            '[RES] if usage > 90 → send_event_to_backend(HIGH_CPU | HIGH_MEMORY)'
+            '[RES] /proc/stat cpu line → jiffies into struct CpuUsage (see .h)',
+            '[RES] Δidle / Δtotal vs static prev_* → cpu.usage_percent',
+            '[RES] /proc/meminfo key:value lines → MemoryInfo members',
+            '[RES] used = MemTotal − MemAvailable → mem.usage_percent',
+            '[RES] struct ProcessStats + get_process_stats (per-pid /proc/[pid]/stat)',
+            '[RES] thread loop: thresholds → send_event_to_backend (declared in .h)',
         ];
         if (vizResCaption) {
             vizResCaption.textContent = captions[phase];
+        }
+
+        if (vizResPipelineAnim) {
+            vizResPipelineAnim.dataset.phase = String(phase);
+        }
+        if (vizResPipelineFill) {
+            vizResPipelineFill.style.width = `${((phase + 1) / 6) * 100}%`;
+        }
+        if (vizResPipelineBeam) {
+            const pct = ((phase + 0.5) / 6) * 100;
+            vizResPipelineBeam.style.left = `${pct}%`;
+        }
+        if (resVizStepCaption) {
+            const steps = [
+                '1 / 6 — struct CpuUsage · read jiffies',
+                '2 / 6 — Δ sample → cpu.usage_percent',
+                '3 / 6 — struct MemoryInfo · scan meminfo',
+                '4 / 6 — used vs total → mem.usage_percent',
+                '5 / 6 — ProcessStats · /proc/[pid]/stat',
+                '6 / 6 — alerts → send_event_to_backend',
+            ];
+            resVizStepCaption.textContent = steps[phase];
         }
     }
 
@@ -767,8 +1091,17 @@ document.addEventListener("DOMContentLoaded", () => {
         conceptVizPage = pageName;
         conceptVizT0 = performance.now();
         conceptVizFrameSkip = 1;
+        conceptVizPaused = false;
+        conceptVizFrozenElapsed = 0;
         if (pageName === 'red-team') rtResetInteractive();
+        const sid = CONCEPT_SCROLL_BY_PAGE[pageName];
+        if (sid) lastConceptCodePhase[sid] = null;
+        if (pageName === 'os-resources') lastConceptCodePhase['os-resources-h-code-scroll'] = null;
+        if (pageName === 'os-resources' && vizResPipelineAnim) {
+            vizResPipelineAnim.classList.remove('res-pipeline-anim--paused');
+        }
         conceptVizRaf = requestAnimationFrame(conceptVizFrame);
+        updateResVizToolbar();
     }
 
     let ipcStatusTimer = null;
@@ -835,14 +1168,20 @@ document.addEventListener("DOMContentLoaded", () => {
         stopConceptViz();
         startConceptViz(pageName);
 
-        // REST fallback: when navigating to Events Log, immediately refresh
-        // recent_events even if a Socket.IO update was missed.
-        if (pageName === 'events') {
+        // REST fallback: when navigating to Events/Resolved pages, refresh
+        // data immediately even if a Socket.IO update was missed.
+        if (pageName === 'events' || pageName === 'resolved-cases' || pageName === 'terminated-processes') {
             fetch('/api/dashboard_snapshot')
                 .then((r) => r.json())
                 .then((snap) => {
-                    if (window.renderEvents) {
+                    if (pageName === 'events' && window.renderEvents) {
                         window.renderEvents((snap && snap.recent_events) || []);
+                    }
+                    if (pageName === 'resolved-cases') {
+                        renderResolvedCases((snap && snap.resolved_cases_rows) || []);
+                    }
+                    if (pageName === 'terminated-processes') {
+                        renderTerminatedProcesses((snap && snap.terminated_process_rows) || []);
                     }
                 })
                 .catch(() => {});
@@ -1114,6 +1453,265 @@ document.addEventListener("DOMContentLoaded", () => {
     // Expose for REST fallback refresh in switchPage()
     window.renderEvents = renderEvents;
 
+    const renderResolvedCases = (rows = []) => {
+        resolvedCasesAll = Array.isArray(rows) ? rows.slice() : [];
+        applyResolvedCaseFilters();
+    };
+
+    const drawResolvedCases = (rows = []) => {
+        if (!resolvedCasesTable) return;
+        if (!rows.length) {
+            resolvedCasesTable.innerHTML =
+                '<tr><td colspan="9" style="text-align:center; padding: 20px;">No resolved cases found.</td></tr>';
+            return;
+        }
+        const esc = (s) =>
+            String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/"/g, '&quot;');
+        resolvedCasesTable.innerHTML = rows
+            .map(
+                (r) => `
+            <tr class="sev-${esc(r.severity)}">
+                <td>${esc(r.alert_id)}</td>
+                <td>${esc(r.severity)}</td>
+                <td>${esc(r.trigger_event)}</td>
+                <td>${esc(r.detected_at)}</td>
+                <td>${esc(r.resolved_at || '—')}</td>
+                <td>${esc(r.resolution_detail || 'Resolved flag set')}</td>
+                <td>${esc(r.process_name || '—')}</td>
+                <td>${esc(r.pid ?? '—')}</td>
+                <td>${esc(r.process_created_at || '—')}</td>
+            </tr>`
+            )
+            .join('');
+    };
+
+    const renderTerminatedProcesses = (rows = []) => {
+        terminatedProcessesAll = Array.isArray(rows) ? rows.slice() : [];
+        applyTerminatedProcessFilters();
+    };
+
+    const drawTerminatedProcesses = (rows = []) => {
+        if (!terminatedProcessesTable) return;
+        if (!rows.length) {
+            terminatedProcessesTable.innerHTML =
+                '<tr><td colspan="8" style="text-align:center; padding: 20px;">No terminated process records found.</td></tr>';
+            return;
+        }
+        const esc = (s) =>
+            String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/"/g, '&quot;');
+        terminatedProcessesTable.innerHTML = rows
+            .map(
+                (r) => `
+            <tr>
+                <td>${esc(r.terminated_at || '—')}</td>
+                <td>${esc(r.terminated_by || 'system')}</td>
+                <td>${esc(r.action_type || 'PROCESS_KILLED')}</td>
+                <td>${esc(r.process_name || '—')}</td>
+                <td>${esc(r.pid ?? '—')}</td>
+                <td>${esc(r.process_created_at || '—')}</td>
+                <td>${esc(r.source || '—')}</td>
+                <td>${esc(r.details || '—')}</td>
+            </tr>`
+            )
+            .join('');
+    };
+
+    const parseDateInput = (s) => {
+        if (!s) return null;
+        const t = Date.parse(s);
+        return Number.isFinite(t) ? t : null;
+    };
+
+    const toDateTimeLocal = (d) => {
+        if (!(d instanceof Date)) return '';
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
+    const applyQuickRange = (fromEl, toEl, mode) => {
+        if (!fromEl || !toEl) return;
+        const now = new Date();
+        const from = new Date(now.getTime());
+        if (mode === 'today') {
+            from.setHours(0, 0, 0, 0);
+        } else if (mode === '24h') {
+            from.setHours(from.getHours() - 24);
+        } else {
+            from.setDate(from.getDate() - 7);
+        }
+        fromEl.value = toDateTimeLocal(from);
+        toEl.value = toDateTimeLocal(now);
+    };
+
+    const exportRowsToCsv = (filenamePrefix, columns, rows) => {
+        if (!rows || !rows.length) return;
+        const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const header = columns.map((c) => esc(c.label)).join(',');
+        const lines = rows.map((row) => columns.map((c) => esc(row[c.key])).join(','));
+        const csv = [header, ...lines].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        a.href = url;
+        a.download = `${filenamePrefix}_${ts}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    };
+
+    function applyResolvedCaseFilters() {
+        const caseId = (resolvedFilterCaseId?.value || '').trim();
+        const q = (resolvedFilterText?.value || '').trim().toLowerCase();
+        const pid = (resolvedFilterPid?.value || '').trim();
+        const fromTs = parseDateInput(resolvedFilterFrom?.value || '');
+        const toTs = parseDateInput(resolvedFilterTo?.value || '');
+        const out = resolvedCasesAll.filter((r) => {
+            if (caseId && String(r.alert_id ?? '').trim() !== caseId) return false;
+            const blob = `${r.trigger_event || ''} ${r.process_name || ''} ${r.resolution_detail || ''}`.toLowerCase();
+            if (q && !blob.includes(q)) return false;
+            if (pid && String(r.pid ?? '').trim() !== pid) return false;
+            const resolvedTs = parseDateInput(r.resolved_at || '');
+            if (fromTs != null && (resolvedTs == null || resolvedTs < fromTs)) return false;
+            if (toTs != null && (resolvedTs == null || resolvedTs > toTs)) return false;
+            return true;
+        });
+        resolvedCasesFiltered = out;
+        drawResolvedCases(out);
+    }
+
+    function applyTerminatedProcessFilters() {
+        const user = (terminatedFilterUser?.value || '').trim().toLowerCase();
+        const pid = (terminatedFilterPid?.value || '').trim();
+        const q = (terminatedFilterText?.value || '').trim().toLowerCase();
+        const fromTs = parseDateInput(terminatedFilterFrom?.value || '');
+        const toTs = parseDateInput(terminatedFilterTo?.value || '');
+        const out = terminatedProcessesAll.filter((r) => {
+            if (user && !String(r.terminated_by || '').toLowerCase().includes(user)) return false;
+            if (pid && String(r.pid ?? '').trim() !== pid) return false;
+            const blob = `${r.process_name || ''} ${r.details || ''} ${r.action_type || ''}`.toLowerCase();
+            if (q && !blob.includes(q)) return false;
+            const termTs = parseDateInput(r.terminated_at || '');
+            if (fromTs != null && (termTs == null || termTs < fromTs)) return false;
+            if (toTs != null && (termTs == null || termTs > toTs)) return false;
+            return true;
+        });
+        terminatedProcessesFiltered = out;
+        drawTerminatedProcesses(out);
+    }
+
+    [resolvedFilterCaseId, resolvedFilterText, resolvedFilterPid, resolvedFilterFrom, resolvedFilterTo].forEach((el) => {
+        if (!el) return;
+        el.addEventListener('input', applyResolvedCaseFilters);
+        el.addEventListener('change', applyResolvedCaseFilters);
+    });
+    if (resolvedFilterClear) {
+        resolvedFilterClear.addEventListener('click', () => {
+            if (resolvedFilterCaseId) resolvedFilterCaseId.value = '';
+            if (resolvedFilterText) resolvedFilterText.value = '';
+            if (resolvedFilterPid) resolvedFilterPid.value = '';
+            if (resolvedFilterFrom) resolvedFilterFrom.value = '';
+            if (resolvedFilterTo) resolvedFilterTo.value = '';
+            applyResolvedCaseFilters();
+        });
+    }
+    if (resolvedChipToday) {
+        resolvedChipToday.addEventListener('click', () => {
+            applyQuickRange(resolvedFilterFrom, resolvedFilterTo, 'today');
+            applyResolvedCaseFilters();
+        });
+    }
+    if (resolvedChip24h) {
+        resolvedChip24h.addEventListener('click', () => {
+            applyQuickRange(resolvedFilterFrom, resolvedFilterTo, '24h');
+            applyResolvedCaseFilters();
+        });
+    }
+    if (resolvedChip7d) {
+        resolvedChip7d.addEventListener('click', () => {
+            applyQuickRange(resolvedFilterFrom, resolvedFilterTo, '7d');
+            applyResolvedCaseFilters();
+        });
+    }
+    if (resolvedExportCsv) {
+        resolvedExportCsv.addEventListener('click', () => {
+            exportRowsToCsv(
+                'resolved_cases_filtered',
+                [
+                    { key: 'alert_id', label: 'Case ID' },
+                    { key: 'severity', label: 'Severity' },
+                    { key: 'trigger_event', label: 'Trigger Event' },
+                    { key: 'detected_at', label: 'Detected At' },
+                    { key: 'resolved_at', label: 'Resolved At' },
+                    { key: 'resolution_detail', label: 'How Resolved' },
+                    { key: 'process_name', label: 'Process Name' },
+                    { key: 'pid', label: 'PID' },
+                    { key: 'process_created_at', label: 'Process Created' },
+                ],
+                resolvedCasesFiltered
+            );
+        });
+    }
+
+    [terminatedFilterUser, terminatedFilterPid, terminatedFilterText, terminatedFilterFrom, terminatedFilterTo].forEach((el) => {
+        if (!el) return;
+        el.addEventListener('input', applyTerminatedProcessFilters);
+        el.addEventListener('change', applyTerminatedProcessFilters);
+    });
+    if (terminatedFilterClear) {
+        terminatedFilterClear.addEventListener('click', () => {
+            if (terminatedFilterUser) terminatedFilterUser.value = '';
+            if (terminatedFilterPid) terminatedFilterPid.value = '';
+            if (terminatedFilterText) terminatedFilterText.value = '';
+            if (terminatedFilterFrom) terminatedFilterFrom.value = '';
+            if (terminatedFilterTo) terminatedFilterTo.value = '';
+            applyTerminatedProcessFilters();
+        });
+    }
+    if (terminatedChipToday) {
+        terminatedChipToday.addEventListener('click', () => {
+            applyQuickRange(terminatedFilterFrom, terminatedFilterTo, 'today');
+            applyTerminatedProcessFilters();
+        });
+    }
+    if (terminatedChip24h) {
+        terminatedChip24h.addEventListener('click', () => {
+            applyQuickRange(terminatedFilterFrom, terminatedFilterTo, '24h');
+            applyTerminatedProcessFilters();
+        });
+    }
+    if (terminatedChip7d) {
+        terminatedChip7d.addEventListener('click', () => {
+            applyQuickRange(terminatedFilterFrom, terminatedFilterTo, '7d');
+            applyTerminatedProcessFilters();
+        });
+    }
+    if (terminatedExportCsv) {
+        terminatedExportCsv.addEventListener('click', () => {
+            exportRowsToCsv(
+                'terminated_processes_filtered',
+                [
+                    { key: 'terminated_at', label: 'Terminated At' },
+                    { key: 'terminated_by', label: 'Terminated By' },
+                    { key: 'action_type', label: 'Action Type' },
+                    { key: 'process_name', label: 'Process Name' },
+                    { key: 'pid', label: 'PID' },
+                    { key: 'process_created_at', label: 'Process Created At' },
+                    { key: 'source', label: 'Source' },
+                    { key: 'details', label: 'Details' },
+                ],
+                terminatedProcessesFiltered
+            );
+        });
+    }
+
     const renderStateHistory = (history = []) => {
         if (!stateHistoryList) return;
         if (!history.length) {
@@ -1322,6 +1920,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     let dataPoints = 15;
+    let threatEmaA = null;
+    let threatEmaB = null;
+    let cpuEma = null;
+    let lastThreatAppendMs = 0;
+    let lastCpuAppendMs = 0;
+    const THREAT_APPEND_INTERVAL_MS = 900;
+    const CPU_APPEND_INTERVAL_MS = 700;
+
+    const clampPercent = (v) => Math.max(0, Math.min(100, Number(v) || 0));
+    const smoothEma = (prev, next, alpha = 0.28) =>
+        prev == null ? next : prev + alpha * (next - prev);
 
     // ═══ Processor Performance History Chart (CPU Line Graph) ════════════
     let cpuHistoryChart = null;
@@ -1477,7 +2086,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const dashStatus = document.getElementById('dash-status');
         
         if (dashActive) dashActive.textContent = activeAlerts.length;
-        if (dashResolved) dashResolved.textContent = Math.max(0, (data.kill_cnt || 0) * 3); 
+        if (dashResolved) dashResolved.textContent = data.resolved_cases || 0;
         if (dashKills) dashKills.textContent = data.kill_cnt || 0;
         if (dashVuln) dashVuln.textContent = (counts.HIGH || 0) + (counts.CRITICAL || 0);
         if (dashStatus) {
@@ -1539,6 +2148,8 @@ document.addEventListener("DOMContentLoaded", () => {
         applyGlobalStateUi(data.state);
         applySeverityCounts(counts);
         renderAlerts(activeAlerts, data.recent_alerts);
+        renderResolvedCases(data.resolved_cases_rows || []);
+        renderTerminatedProcesses(data.terminated_process_rows || []);
         renderEvents(data.recent_events || []);
         renderStateHistory(data.state_history || []);
         renderProcesses(data.processes || []);
@@ -1570,9 +2181,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (cpuHistoryChart) {
-            cpuHistoryChart.data.datasets[0].data.push(res.cpu.util);
-            cpuHistoryChart.data.datasets[0].data.shift();
-            cpuHistoryChart.update('none');
+            const now = Date.now();
+            const rawCpu = clampPercent(res.cpu.util);
+            cpuEma = smoothEma(cpuEma, rawCpu, 0.22);
+            if (now - lastCpuAppendMs >= CPU_APPEND_INTERVAL_MS) {
+                cpuHistoryChart.data.datasets[0].data.push(Number(cpuEma.toFixed(2)));
+                cpuHistoryChart.data.datasets[0].data.shift();
+                cpuHistoryChart.update('none');
+                lastCpuAppendMs = now;
+            }
         }
 
         // Update Memory
@@ -1651,7 +2268,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (activeAlertsValue) activeAlertsValue.textContent = activeAlerts;
         if (responseActionsValue) responseActionsValue.textContent = data.kill_cnt || 0;
         const dashKills = document.getElementById('dash-kills');
+        const dashResolved = document.getElementById('dash-resolved');
         if (dashKills) dashKills.textContent = data.kill_cnt || 0;
+        if (dashResolved && data.resolved_cases !== undefined) dashResolved.textContent = data.resolved_cases || 0;
         if (sidebarAlertCount) sidebarAlertCount.textContent = activeAlerts;
 
         applySeverityCounts(counts);
@@ -1661,15 +2280,24 @@ document.addEventListener("DOMContentLoaded", () => {
         if (threatChart) {
             metricsThreatTick = (metricsThreatTick + 1) % 2;
             if (metricsThreatTick === 0) {
-                threatChart.data.labels.push(dataPoints++);
-                threatChart.data.datasets[0].data.push(eventsLastMin + Math.random() * 5);
-                threatChart.data.datasets[1].data.push(counts.HIGH || counts.MEDIUM || 0);
-                if (threatChart.data.labels.length > 30) {
-                    threatChart.data.labels.shift();
-                    threatChart.data.datasets[0].data.shift();
-                    threatChart.data.datasets[1].data.shift();
+                const now = Date.now();
+                const rawA = Math.max(0, Number(eventsLastMin) || 0);
+                const rawB = Math.max(0, Number((counts.HIGH || 0) + (counts.CRITICAL || 0)));
+                threatEmaA = smoothEma(threatEmaA, rawA, 0.24);
+                threatEmaB = smoothEma(threatEmaB, rawB, 0.3);
+
+                if (now - lastThreatAppendMs >= THREAT_APPEND_INTERVAL_MS) {
+                    threatChart.data.labels.push(dataPoints++);
+                    threatChart.data.datasets[0].data.push(Number(threatEmaA.toFixed(2)));
+                    threatChart.data.datasets[1].data.push(Number(threatEmaB.toFixed(2)));
+                    if (threatChart.data.labels.length > 30) {
+                        threatChart.data.labels.shift();
+                        threatChart.data.datasets[0].data.shift();
+                        threatChart.data.datasets[1].data.shift();
+                    }
+                    threatChart.update('none');
+                    lastThreatAppendMs = now;
                 }
-                threatChart.update('none');
             }
         }
 
