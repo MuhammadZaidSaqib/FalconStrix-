@@ -6,7 +6,7 @@
     <script>if ('scrollRestoration' in history) history.scrollRestoration = 'manual';</script>
     <title>FalconStrix — SOC Dashboard</title>
     <meta name="description" content="Hybrid Behavioral Cybersecurity SOC Command Center with OS-Level Integration">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260330q') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260401m') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
@@ -29,10 +29,10 @@
                 <div class="nav-section-label">Monitoring</div>
                 <button class="nav-item active" data-page="dashboard" id="nav-dashboard"><span class="nav-text">Dashboard</span></button>
                 <button class="nav-item" data-page="alerts" id="nav-alerts"><span class="nav-text">Live Alerts</span><span class="nav-badge" id="sidebar-alert-count">0</span></button>
-                <button class="nav-item" data-page="resolved-cases" id="nav-resolved-cases"><span class="nav-text">System Process Monitor</span></button>
+                <button class="nav-item" data-page="resolved-cases" id="nav-resolved-cases"><span class="nav-text">Solved Cases</span></button>
+                <button class="nav-item" data-page="process-monitor" id="nav-process-monitor"><span class="nav-text">Process Monitor</span><span class="nav-badge" style="background:#00c3ff">LIVE</span></button>
                 <button class="nav-item" data-page="terminated-processes" id="nav-terminated-processes"><span class="nav-text">Terminated Processes</span></button>
                 <button class="nav-item" data-page="events" id="nav-events"><span class="nav-text">Events Log</span></button>
-                <button class="nav-item" data-page="process-monitor" id="nav-process-monitor"><span class="nav-text">Process Monitor</span><span class="nav-badge" style="background:#00c3ff">LIVE</span></button>
                 <button class="nav-item" data-page="fsm" id="nav-fsm"><span class="nav-text">FSM State</span></button>
                 <div class="nav-section-label">OS Concepts</div>
                 <button class="nav-item" data-page="os-concepts" id="nav-os-concepts"><span class="nav-text">All Concepts</span><span class="nav-badge concept-badge">10</span></button>
@@ -89,7 +89,7 @@
                                     <div class="ov-right"><strong id="dash-active-threats" class="ov-val red-text">16</strong> <span class="ov-arrow">›</span></div>
                                 </div>
                                 <div class="ov-item" onclick="switchPage('resolved-cases')" style="cursor: pointer;">
-                                    <div class="ov-left"><span class="ov-icon green">✔</span> <span class="ov-name">System Process Monitor</span></div>
+                                    <div class="ov-left"><span class="ov-icon green">✔</span> <span class="ov-name">Solved Cases</span></div>
                                     <div class="ov-right"><strong id="dash-resolved" class="ov-val green-text">128</strong> <span class="ov-arrow">›</span></div>
                                 </div>
                                 <div class="ov-item" onclick="switchPage('terminated-processes')" style="cursor: pointer;">
@@ -337,7 +337,7 @@
             <!-- ════════ PAGE: RESOLVED CASES ════════ -->
             <main id="page-resolved-cases" class="page">
                 <section class="panel feed-container">
-                    <div class="panel-heading"><h2>System Process Monitor</h2></div>
+                    <div class="panel-heading"><h2>Solved Cases</h2></div>
                     <div class="table-filters">
                         <input id="resolved-filter-case-id" type="text" placeholder="Case ID" />
                         <input id="resolved-filter-text" type="text" placeholder="Search (event/process/how)" />
@@ -425,7 +425,7 @@
             <main id="page-process-monitor" class="page">
                 <section class="panel">
                     <div class="panel-heading">
-                        <h2>System Process Monitor</h2>
+                        <h2>Solved Cases</h2>
                     </div>
                     <div class="table-responsive">
                         <table class="process-table">
@@ -544,7 +544,7 @@
                         <div class="concept-detail-main">
                     <div class="concept-detail-hero"><div><h2>Process Creation &amp; Management</h2><p class="hero-sub">fork(), wait(), Parent-Child Architecture</p></div></div>
                     <div class="concept-detail-content">
-                        <div class="detail-section detail-section--readable"><h3>How It Works (from real <code>main.cpp</code>)</h3><p><strong>Big picture:</strong> <code>main()</code> runs a <code>while (running)</code> loop. Each iteration calls <code>fork()</code> once. The <strong>child</strong> only runs the monitoring engine (<code>run_child_engine()</code> + <code>_exit(0)</code>). The <strong>parent</strong> saves the child PID, then <strong>blocks</strong> in <code>waitpid()</code> until the child exits. If the child crashes or is killed, the parent waits 2 seconds and <strong>forks again</strong> (fault recovery).</p><p><strong>Why it looks odd at first:</strong> after <code>fork()</code>, the same source file keeps running in <em>two</em> processes. The return value of <code>fork()</code> tells you which role you are in—<code>pid == 0</code> means child, <code>pid &gt; 0</code> means parent (that number is the child’s PID). The parent must <code>waitpid</code> so the kernel can free the child’s bookkeeping entry; otherwise you get <strong>zombie</strong> processes stacking up.</p><p class="detail-hint">Use the <strong>right panel</strong> for the live diagram; the <strong>source code below</strong> highlights the matching block and scrolls to it. Same six steps — <strong>5 seconds</strong> each, <strong>30 seconds</strong> per full cycle. Step ⑤ uses <code>WIFEXITED</code> (normal exit code) vs <code>WIFSIGNALED</code> (killed by signal) to decide whether to restart.</p></div>
+                        <div class="detail-section detail-section--readable"><h3>How It Works (from real <code>main.cpp</code>)</h3><p><strong>Big picture:</strong> <code>main()</code> runs a <code>while (running)</code> loop. Each iteration calls <code>fork()</code> once. The <strong>child</strong> only runs the monitoring engine (<code>run_child_engine()</code> + <code>_exit(0)</code>). The <strong>parent</strong> saves the child PID, then <strong>blocks</strong> in <code>waitpid()</code> until the child exits. If the child crashes or is killed, the parent waits 2 seconds and <strong>forks again</strong> (fault recovery).</p><p><strong>Why it looks odd at first:</strong> after <code>fork()</code>, the same source file keeps running in <em>two</em> processes. The return value of <code>fork()</code> tells you which role you are in—<code>pid == 0</code> means child, <code>pid &gt; 0</code> means parent (that number is the child’s PID). The parent must <code>waitpid</code> so the kernel can free the child’s bookkeeping entry; otherwise you get <strong>zombie</strong> processes stacking up.</p></div>
                         <div class="detail-section"><h3>Source Code — main.cpp (real flow excerpt)</h3><p class="code-sync-hint">The <strong>highlighted block</strong> matches the active step on the right; the panel <strong>scrolls</strong> so that code stays in view.</p><pre class="os-process-code-pre" id="os-process-code-scroll"><code id="os-process-code-main">#include &lt;iostream&gt;
 #include &lt;unistd.h&gt;
 #include &lt;sys/types.h&gt;
@@ -1097,8 +1097,9 @@ int main() {
                         <div class="concept-detail-main">
                     <div class="concept-detail-hero"><div><h2>Resource Monitoring</h2><p class="hero-sub">CPU &amp; Memory Tracking via /proc</p></div></div>
                     <div class="concept-detail-content">
-                        <div class="detail-section"><h3>How It Works</h3><p>A dedicated <strong>resource monitor</strong> thread (see <code>start_resource_monitor</code>) wakes every <strong>5 seconds</strong>, samples the kernel pseudo-filesystems, and logs CPU and memory percentages. <strong>CPU %</strong> is not read directly from the kernel: the code stores the previous jiffies from <code>/proc/stat</code>, compares the next sample, and turns <em>Δ busy time / Δ total time</em> into <code>usage_percent</code>. <strong>Memory %</strong> prefers <code>MemAvailable</code> (what the kernel thinks apps can allocate) over raw <code>MemFree</code>, then derives used memory vs <code>MemTotal</code>. <code>ProcessStats</code> and <code>get_process_stats(pid)</code> mirror optional per-process fields from <code>/proc/[pid]/stat</code> (utime, stime, RSS, thread count). When either percentage exceeds <strong>90%</strong>, the engine emits <code>HIGH_CPU</code> or <code>HIGH_MEMORY</code> through the same IPC path as other detectors.</p><p class="detail-hint"><strong>Reading the numbers:</strong> the first <code>get_cpu_usage()</code> call only primes <code>prev_*</code>—the <em>second</em> call produces a meaningful percentage. The dashboard gauges on the right are simulated for teaching clarity; on a real Linux host the same structs would reflect live <code>/proc</code> parses.</p></div>
-                        <div class="detail-section"><h3>Source code — resource_monitor.cpp (complete)</h3><p class="code-sync-hint">The <strong>highlighted block</strong> tracks the /proc pipeline on the right (stat → CpuUsage → meminfo → MemoryInfo → thread → alerts). The panels <strong>auto-scroll</strong> in sync with each 5s step; <strong>Stop</strong> freezes the animation and keeps both code panels aligned.</p><pre class="os-process-code-pre" id="os-resources-code-scroll"><code><span class="code-step-block" data-code-phase="res-cpu-read">#include "resource_monitor.h"
+                        <div class="resource-stage-grid">
+                        <div class="detail-section detail-section--readable resource-intro-card"><h3>How It Works</h3><p>The <strong>resource monitor thread</strong> wakes every <strong>5 seconds</strong>, samples <code>/proc/stat</code> and <code>/proc/meminfo</code>, then translates raw kernel counters into readable CPU and memory percentages. CPU usage is a <strong>delta</strong> between the current and previous jiffy sample, while memory usage comes from <strong>MemTotal - MemAvailable</strong>.</p><div class="resource-inline-summary"><div class="resource-inline-track"><span class="resource-inline-chip" data-viz-res-summary-screen="0">/proc/stat</span><span class="resource-inline-chip" data-viz-res-summary-screen="1">CpuUsage</span><span class="resource-inline-chip" data-viz-res-summary-screen="2">/proc/meminfo</span><span class="resource-inline-chip" data-viz-res-summary-screen="3">MemoryInfo</span><span class="resource-inline-chip" data-viz-res-summary-screen="4">/proc/[pid]/stat</span><span class="resource-inline-chip" data-viz-res-summary-screen="5">alert send</span></div><div class="resource-inline-metrics"><div class="resource-inline-metric"><span>CPU</span><strong data-viz-res-summary-value="cpu">0.0%</strong></div><div class="resource-inline-metric"><span>MEM</span><strong data-viz-res-summary-value="mem">0.0%</strong></div><div class="resource-inline-metric resource-inline-metric--alert" data-viz-res-summary-value="alert">NORMAL</div></div></div></div>
+                        <div class="detail-section resource-code-card resource-code-card--cpp"><div class="resource-card-head"><span class="resource-card-kicker">Implementation</span><h3>resource_monitor.cpp</h3></div><p class="code-sync-hint">The highlighted block follows the live runtime film: <strong>/proc/stat → CpuUsage → /proc/meminfo → MemoryInfo → thread loop → alert send</strong>.</p><pre class="os-process-code-pre" id="os-resources-code-scroll"><code><span class="code-step-block" data-code-phase="res-cpu-read">#include "resource_monitor.h"
 #include &lt;fstream&gt;
 #include &lt;sstream&gt;
 #include &lt;iostream&gt;
@@ -1190,7 +1191,56 @@ void* start_resource_monitor(void* arg) {
     }
     return NULL;
 }</span></code></pre></div>
-                        <div class="detail-section"><h3>Header — resource_monitor.h</h3><p class="code-sync-hint">These <strong>structs and prototypes</strong> are the contract the .cpp file implements. Each block <strong>highlights</strong> and the header <strong>auto-scrolls</strong> in sync with the same beam/progress steps on the right.</p><pre class="os-process-code-pre" id="os-resources-h-code-scroll"><code><span class="code-step-block" data-code-phase="res-cpu-read">#ifndef RESOURCE_MONITOR_H
+                        <div class="detail-section resource-detail-card">
+                            <div class="res-viz-toolbar" role="group" aria-label="Resource pipeline animation">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-resources" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-resources">Stop</button>
+                                <button type="button" class="res-viz-btn" id="viz-btn-prev-os-resources" disabled>Prev</button>
+                                <button type="button" class="res-viz-btn" id="viz-btn-next-os-resources" disabled>Next</button>
+                                <span class="res-viz-state" id="viz-state-os-resources" aria-live="polite">Running</span>
+                            </div>
+                            <p class="res-viz-step-caption" id="res-viz-step-caption"></p>
+                            <div class="res-pipeline-anim" id="viz-res-pipeline-anim" data-phase="0">
+                                <div class="res-pipeline-rail" aria-hidden="true">
+                                    <div class="res-pipeline-progress-fill" id="viz-res-pipeline-fill"></div>
+                                    <div class="res-pipeline-beam" id="viz-res-pipeline-beam"></div>
+                                </div>
+                                <div class="res-pipeline" id="viz-res-pipeline" aria-hidden="true">
+                                    <span class="res-pipe-node" data-viz-res-pipe="0">/proc/stat</span>
+                                    <span class="res-pipe-join">→</span>
+                                    <span class="res-pipe-node" data-viz-res-pipe="1">CpuUsage</span>
+                                    <span class="res-pipe-join">→</span>
+                                    <span class="res-pipe-node" data-viz-res-pipe="2">/proc/meminfo</span>
+                                    <span class="res-pipe-join">→</span>
+                                    <span class="res-pipe-node" data-viz-res-pipe="3">MemoryInfo</span>
+                                    <span class="res-pipe-join">→</span>
+                                    <span class="res-pipe-node" data-viz-res-pipe="4">/proc/[pid]/stat</span>
+                                    <span class="res-pipe-join">→</span>
+                                    <span class="res-pipe-node" data-viz-res-pipe="5">send_event_to_backend</span>
+                                </div>
+                            </div>
+                            <div class="res-struct-row">
+                                <div class="res-mini-struct" data-viz-res-box="cpu">
+                                    <div class="rms-title">struct CpuUsage</div>
+                                    <div class="rms-fields" id="viz-res-cpu-fields">user, nice, system, idle → Δ →</div>
+                                    <div class="rms-hl">double usage_percent</div>
+                                </div>
+                                <div class="res-mini-struct" data-viz-res-box="mem">
+                                    <div class="rms-title">struct MemoryInfo</div>
+                                    <div class="rms-fields" id="viz-res-mem-fields">MemTotal…MemAvailable →</div>
+                                    <div class="rms-hl">double usage_percent</div>
+                                </div>
+                                <div class="res-mini-struct" data-viz-res-box="proc">
+                                    <div class="rms-title">struct ProcessStats</div>
+                                    <div class="rms-fields" id="viz-res-proc-fields">pid, utime, stime, vsize, rss…</div>
+                                </div>
+                            </div>
+                            <div class="res-alert-strip" id="viz-res-alert-strip">
+                                threshold: if (cpu &gt; 90 || mem &gt; 90) → HIGH_CPU / HIGH_MEMORY
+                            </div>
+                            <p class="viz-dynamic-caption" id="viz-os-resources-caption"></p>
+                        </div>
+                        <div class="detail-section resource-code-card resource-code-card--h"><div class="resource-card-head"><span class="resource-card-kicker">Contract</span><h3>resource_monitor.h</h3></div><p class="code-sync-hint">These structs and prototypes define the data contract the runtime film is visualizing. The header scrolls in sync with the same active step.</p><pre class="os-process-code-pre" id="os-resources-h-code-scroll"><code><span class="code-step-block" data-code-phase="res-cpu-read">#ifndef RESOURCE_MONITOR_H
 #define RESOURCE_MONITOR_H
 #include &lt;string&gt;
 
@@ -1222,67 +1272,80 @@ void send_event_to_backend(const std::string&amp; event_type,
     const std::string&amp; pname, int severity);
 
 #endif</span></code></pre></div>
+                        <aside class="detail-section resource-video-card" aria-label="/proc resource sampling">
+                            <div class="resource-card-head resource-card-head--video">
+                                <span class="resource-card-kicker">Runtime Film</span>
+                                <div>
+                                    <h3>resource_monitor.h → runtime</h3>
+                                    <p class="resource-video-lead">A video-style animation of the same pipeline the code executes.</p>
+                                </div>
+                            </div>
+                            <div class="resource-video-screen">
+                                <div class="resource-video-topbar">
+                                    <span class="resource-video-tag">LIVE LOOP</span>
+                                    <span class="resource-video-step" id="viz-res-video-step">Step 1/6</span>
+                                </div>
+                                <div class="resource-cinema" id="viz-res-cinema">
+                                    <div class="resource-cinema-grid" aria-hidden="true"></div>
+                                    <div class="resource-cinema-scan" aria-hidden="true"></div>
+                                    <div class="resource-cinema-aura" aria-hidden="true"></div>
+                                    <div class="resource-cinema-stage">
+                                        <div class="resource-cinema-side">
+                                            <div class="resource-cinema-core">
+                                                <span class="resource-cinema-ring resource-cinema-ring--a"></span>
+                                                <span class="resource-cinema-ring resource-cinema-ring--b"></span>
+                                                <span class="resource-cinema-dot"></span>
+                                            </div>
+                                            <div class="resource-cinema-load">
+                                                <h4 class="res-gauges-heading">Simulated load</h4>
+                                                <div class="viz-gauge">
+                                                    <div class="viz-gauge-label"><span>CPU %</span><span id="viz-res-cpu-label"></span></div>
+                                                    <div class="viz-gauge-bar"><div class="viz-gauge-fill" id="viz-res-cpu-fill"></div></div>
+                                                </div>
+                                                <div class="viz-gauge">
+                                                    <div class="viz-gauge-label"><span>Memory %</span><span id="viz-res-mem-label"></span></div>
+                                                    <div class="viz-gauge-bar"><div class="viz-gauge-fill" id="viz-res-mem-fill"></div></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="resource-cinema-brief">
+                                            <div class="resource-cinema-copy">
+                                                <strong id="viz-res-video-title">Sampling kernel counters</strong>
+                                                <span id="viz-res-video-subtitle">The playhead sweeps across each /proc stage.</span>
+                                            </div>
+                                            <div class="resource-cinema-lanes">
+                                                <div class="resource-cinema-lane" data-viz-res-lane="cpu"><span>CPU stream</span><i></i></div>
+                                                <div class="resource-cinema-lane" data-viz-res-lane="mem"><span>Memory stream</span><i></i></div>
+                                                <div class="resource-cinema-lane" data-viz-res-lane="proc"><span>Process stats</span><i></i></div>
+                                                <div class="resource-cinema-lane" data-viz-res-lane="alert"><span>Alert gate</span><i></i></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="resource-cinema-track">
+                                        <span class="resource-cinema-chip" data-viz-res-screen="0">/proc/stat</span>
+                                        <span class="resource-cinema-chip" data-viz-res-screen="1">CpuUsage</span>
+                                        <span class="resource-cinema-chip" data-viz-res-screen="2">/proc/meminfo</span>
+                                        <span class="resource-cinema-chip" data-viz-res-screen="3">MemoryInfo</span>
+                                        <span class="resource-cinema-chip" data-viz-res-screen="4">/proc/[pid]/stat</span>
+                                        <span class="resource-cinema-chip" data-viz-res-screen="5">alert send</span>
+                                    </div>
+                                    <div class="resource-cinema-metrics">
+                                        <div class="resource-cinema-metric">
+                                            <span>CPU</span>
+                                            <strong id="viz-res-cpu-chip">0.0%</strong>
+                                        </div>
+                                        <div class="resource-cinema-metric">
+                                            <span>MEM</span>
+                                            <strong id="viz-res-mem-chip">0.0%</strong>
+                                        </div>
+                                        <div class="resource-cinema-metric resource-cinema-metric--alert" id="viz-res-video-alert">NORMAL</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </aside>
+                        </div>
                         <div class="detail-section"><h3>Files</h3><p><code>resource_monitor.cpp</code>, <code>resource_monitor.h</code></p></div>
                     </div>
-                        </div>
-                        <aside class="concept-viz-aside thread-viz-aside" aria-label="/proc resource sampling">
-                            <h3 class="thread-viz-title">resource_monitor.h → runtime</h3>
-                            <p class="thread-viz-lead">The <strong>left column</strong> highlights matching code (both the .cpp and the .h auto-scroll in sync). This panel uses a <strong>progress rail + beam</strong> so you can see which /proc stage is active. Use <strong>Stop</strong> to freeze the loop; <strong>Start</strong> resumes from the same point.</p>
-                            <div class="res-viz-toolbar" role="group" aria-label="Resource pipeline animation">
-                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-resources" disabled>Start</button>
-                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-resources">Stop</button>
-                                <span class="res-viz-state" id="viz-state-os-resources" aria-live="polite">Running</span>
-                            </div>
-                            <p class="res-viz-step-caption" id="res-viz-step-caption"></p>
-                            <div class="res-pipeline-anim" id="viz-res-pipeline-anim" data-phase="0">
-                                <div class="res-pipeline-rail" aria-hidden="true">
-                                    <div class="res-pipeline-progress-fill" id="viz-res-pipeline-fill"></div>
-                                    <div class="res-pipeline-beam" id="viz-res-pipeline-beam"></div>
-                                </div>
-                            <div class="res-pipeline" id="viz-res-pipeline" aria-hidden="true">
-                                <span class="res-pipe-node" data-viz-res-pipe="0">/proc/stat</span>
-                                <span class="res-pipe-join">→</span>
-                                <span class="res-pipe-node" data-viz-res-pipe="1">CpuUsage</span>
-                                <span class="res-pipe-join">→</span>
-                                <span class="res-pipe-node" data-viz-res-pipe="2">/proc/meminfo</span>
-                                <span class="res-pipe-join">→</span>
-                                <span class="res-pipe-node" data-viz-res-pipe="3">MemoryInfo</span>
-                                <span class="res-pipe-join">→</span>
-                                <span class="res-pipe-node" data-viz-res-pipe="4">/proc/[pid]/stat</span>
-                                <span class="res-pipe-join">→</span>
-                                <span class="res-pipe-node" data-viz-res-pipe="5">send_event_to_backend</span>
-                            </div>
-                            </div>
-                            <div class="res-struct-row">
-                                <div class="res-mini-struct" data-viz-res-box="cpu">
-                                    <div class="rms-title">struct CpuUsage</div>
-                                    <div class="rms-fields" id="viz-res-cpu-fields">user, nice, system, idle → Δ →</div>
-                                    <div class="rms-hl">double usage_percent</div>
-                                </div>
-                                <div class="res-mini-struct" data-viz-res-box="mem">
-                                    <div class="rms-title">struct MemoryInfo</div>
-                                    <div class="rms-fields" id="viz-res-mem-fields">MemTotal…MemAvailable →</div>
-                                    <div class="rms-hl">double usage_percent</div>
-                                </div>
-                                <div class="res-mini-struct" data-viz-res-box="proc">
-                                    <div class="rms-title">struct ProcessStats</div>
-                                    <div class="rms-fields" id="viz-res-proc-fields">pid, utime, stime, vsize, rss…</div>
-                                </div>
-                            </div>
-                            <div class="res-alert-strip" id="viz-res-alert-strip">
-                                threshold: if (cpu &gt; 90 || mem &gt; 90) → HIGH_CPU / HIGH_MEMORY
-                            </div>
-                            <h4 class="res-gauges-heading">Simulated load (5s loop)</h4>
-                            <div class="viz-gauge">
-                                <div class="viz-gauge-label"><span>CPU %</span><span id="viz-res-cpu-label"></span></div>
-                                <div class="viz-gauge-bar"><div class="viz-gauge-fill" id="viz-res-cpu-fill"></div></div>
-                            </div>
-                            <div class="viz-gauge">
-                                <div class="viz-gauge-label"><span>Memory %</span><span id="viz-res-mem-label"></span></div>
-                                <div class="viz-gauge-bar"><div class="viz-gauge-fill" id="viz-res-mem-fill"></div></div>
-                            </div>
-                            <p class="viz-dynamic-caption" id="viz-os-resources-caption"></p>
-                        </aside>
                     </div>
                 </section>
             </main>
@@ -1466,7 +1529,7 @@ void trigger_response(int pid) {
         window.FALCON_USER_ROLE = "{{ (user_role or 'user')|e }}";
         window.FALCON_USERNAME = "{{ (username or '')|e }}";
     </script>
-    <script src="{{ url_for('static', filename='script.js', v='20260331b') }}"></script>
+    <script src="{{ url_for('static', filename='script.js', v='20260401m') }}"></script>
 </body>
 </html>
 

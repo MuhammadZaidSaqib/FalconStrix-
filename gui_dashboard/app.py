@@ -27,7 +27,7 @@ except ImportError:
 
 try:
     from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -991,15 +991,15 @@ def build_dashboard_snapshot(current_state):
 
 
 def _severity_pdf_color(sev):
-    s = str(sev or '').upper()
+    s = str(sev or '').strip().upper()
     if s == 'CRITICAL':
-        return colors.HexColor('#7F1D1D')
+        return colors.HexColor('#DC2626')
     if s == 'HIGH':
-        return colors.HexColor('#7C2D12')
+        return colors.HexColor('#F97316')
     if s == 'MEDIUM':
-        return colors.HexColor('#78350F')
+        return colors.HexColor('#FACC15')
     if s == 'LOW':
-        return colors.HexColor('#14532D')
+        return colors.HexColor('#22C55E')
     return None
 
 
@@ -1010,13 +1010,26 @@ def _to_text(v):
     return txt if txt else '-'
 
 
-def _render_pdf_report(report_title, subtitle, sections):
+def _col_ratio_for_key(key_name):
+    k = str(key_name or '').lower()
+    if 'description' in k or 'detail' in k or 'message' in k or 'title' in k or 'reason' in k:
+        return 3.2
+    if 'timestamp' in k or k.endswith('_at') or k == 'time':
+        return 1.4
+    if 'severity' in k:
+        return 1.1
+    if 'actor' in k or 'user' in k or 'pid' in k or 'id' in k:
+        return 1.0
+    return 1.2
+
+
+def _render_pdf_report(report_title, subtitle, sections, landscape_mode=False):
     if not REPORTLAB_OK:
         raise RuntimeError("PDF engine not available. Install reportlab.")
     buff = io.BytesIO()
     doc = SimpleDocTemplate(
         buff,
-        pagesize=A4,
+        pagesize=landscape(A4) if landscape_mode else A4,
         topMargin=14 * mm,
         bottomMargin=12 * mm,
         leftMargin=10 * mm,
@@ -1025,6 +1038,11 @@ def _render_pdf_report(report_title, subtitle, sections):
         author='FalconStrix',
     )
     styles = getSampleStyleSheet()
+    cell_style = styles['BodyText']
+    cell_style.fontName = 'Helvetica'
+    cell_style.fontSize = 8
+    cell_style.leading = 9.2
+    cell_style.wordWrap = 'CJK'
     story = [
         Paragraph(f"<b>{report_title}</b>", styles['Title']),
         Paragraph(subtitle, styles['Normal']),
@@ -1035,15 +1053,34 @@ def _render_pdf_report(report_title, subtitle, sections):
         cols = section.get('columns') or []
         rows = section.get('rows') or []
         sev_key = section.get('severity_key')
+        sev_col_idx = -1
+        if sev_key and isinstance(section.get('keys'), list):
+            try:
+                sev_col_idx = section.get('keys').index(sev_key)
+            except ValueError:
+                sev_col_idx = -1
         story.append(Paragraph(f"<b>{section_title}</b>", styles['Heading3']))
         if not rows:
             story.append(Paragraph("No records available.", styles['Italic']))
             story.append(Spacer(1, 8))
             continue
+        keys = section.get('keys', [])
         table_data = [cols]
         for row in rows:
-            table_data.append([_to_text(row.get(k)) for k in section.get('keys', [])])
-        table = Table(table_data, repeatRows=1)
+            rendered = []
+            for k in keys:
+                raw = _to_text(row.get(k))
+                safe = (
+                    raw.replace('&', '&amp;')
+                    .replace('<', '&lt;')
+                    .replace('>', '&gt;')
+                )
+                rendered.append(Paragraph(safe, cell_style))
+            table_data.append(rendered)
+        ratios = [_col_ratio_for_key(k) for k in keys]
+        ratio_total = sum(ratios) if ratios else 1
+        col_widths = [doc.width * (r / ratio_total) for r in ratios] if ratios else None
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
         style_cmds = [
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#111827')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -1052,13 +1089,21 @@ def _render_pdf_report(report_title, subtitle, sections):
             ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#374151')),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#F8FAFC'), colors.HexColor('#EEF2FF')]),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
         ]
         if sev_key:
             for i, row in enumerate(rows, start=1):
                 c = _severity_pdf_color(row.get(sev_key))
                 if c:
-                    style_cmds.append(('BACKGROUND', (0, i), (-1, i), c))
-                    style_cmds.append(('TEXTCOLOR', (0, i), (-1, i), colors.whitesmoke))
+                    if sev_col_idx >= 0:
+                        style_cmds.append(('BACKGROUND', (sev_col_idx, i), (sev_col_idx, i), c))
+                        style_cmds.append(('TEXTCOLOR', (sev_col_idx, i), (sev_col_idx, i), colors.black))
+                        style_cmds.append(('FONTNAME', (sev_col_idx, i), (sev_col_idx, i), 'Helvetica-Bold'))
+                    else:
+                        style_cmds.append(('BACKGROUND', (0, i), (-1, i), c))
+                        style_cmds.append(('TEXTCOLOR', (0, i), (-1, i), colors.black))
         table.setStyle(TableStyle(style_cmds))
         story.append(table)
         story.append(Spacer(1, 10))
@@ -1069,7 +1114,9 @@ def _render_pdf_report(report_title, subtitle, sections):
 
 def _send_pdf(report_title, sections, filename):
     subtitle = f"Generated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Source: FalconStrix Dashboard"
-    pdf_stream = _render_pdf_report(report_title, subtitle, sections)
+    # Auto-switch to landscape when any section is wide.
+    wide = any(len(s.get('columns') or []) >= 7 for s in sections or [])
+    pdf_stream = _render_pdf_report(report_title, subtitle, sections, landscape_mode=wide)
     return send_file(
         pdf_stream,
         as_attachment=True,
@@ -1457,6 +1504,21 @@ def api_report_dashboard_pdf():
     try:
         st = get_effective_fsm_state()
         snap = build_dashboard_snapshot(st)
+        resolved_preview = []
+        for r in (snap.get('resolved_cases_rows') or [])[:35]:
+            detail = _to_text(r.get('resolution_detail'))
+            if len(detail) > 80:
+                detail = detail[:77] + '...'
+            resolved_preview.append(
+                {
+                    'alert_id': r.get('alert_id'),
+                    'severity': r.get('severity'),
+                    'resolved_by': r.get('resolved_by'),
+                    'resolved_at': r.get('resolved_at'),
+                    'pid': r.get('pid'),
+                    'resolution_short': detail,
+                }
+            )
         metrics_rows = [
             {'metric': 'FSM State', 'value': snap.get('state')},
             {'metric': 'Active Threats', 'value': len(snap.get('active_alerts') or [])},
@@ -1480,9 +1542,9 @@ def api_report_dashboard_pdf():
             },
             {
                 'title': 'Resolved Cases',
-                'columns': ['Case ID', 'Severity', 'Resolved By', 'Resolved At', 'Process', 'PID', 'Resolution'],
-                'keys': ['alert_id', 'severity', 'resolved_by', 'resolved_at', 'process_name', 'pid', 'resolution_detail'],
-                'rows': (snap.get('resolved_cases_rows') or [])[:40],
+                'columns': ['Case ID', 'Severity', 'Resolved By', 'Resolved At', 'PID', 'Resolution'],
+                'keys': ['alert_id', 'severity', 'resolved_by', 'resolved_at', 'pid', 'resolution_short'],
+                'rows': resolved_preview,
                 'severity_key': 'severity',
             },
             {

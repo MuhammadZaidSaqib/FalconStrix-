@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const pageTitles = {
         'dashboard': 'Dashboard',
         'alerts': 'Live Alerts',
-        'resolved-cases': 'System Process Monitor',
+        'resolved-cases': 'Solved Cases',
         'terminated-processes': 'Terminated Processes Audit',
         'events': 'Events Log',
         'fsm': 'FSM State Machine',
@@ -187,6 +187,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const vizResCpuFields = document.getElementById('viz-res-cpu-fields');
     const vizResMemFields = document.getElementById('viz-res-mem-fields');
     const vizResProcFields = document.getElementById('viz-res-proc-fields');
+    const vizResScreenNodes = document.querySelectorAll('[data-viz-res-screen]');
+    const vizResVideoStep = document.getElementById('viz-res-video-step');
+    const vizResVideoTitle = document.getElementById('viz-res-video-title');
+    const vizResVideoSubtitle = document.getElementById('viz-res-video-subtitle');
+    const vizResCpuChip = document.getElementById('viz-res-cpu-chip');
+    const vizResMemChip = document.getElementById('viz-res-mem-chip');
+    const vizResVideoAlert = document.getElementById('viz-res-video-alert');
+    const vizResLaneNodes = document.querySelectorAll('[data-viz-res-lane]');
+    const vizResSummaryScreenNodes = document.querySelectorAll('[data-viz-res-summary-screen]');
+    const vizResSummaryValueNodes = document.querySelectorAll('[data-viz-res-summary-value]');
     const vizConceptNodes = document.querySelectorAll('[data-concept-viz-node]');
     const vizFsmBadge = document.getElementById('viz-response-fsm');
     const vizKillTarget = document.getElementById('viz-response-kill-target');
@@ -436,12 +446,22 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
     });
+    const resPrevBtn = document.getElementById('viz-btn-prev-os-resources');
+    const resNextBtn = document.getElementById('viz-btn-next-os-resources');
+    if (resPrevBtn) {
+        resPrevBtn.addEventListener('click', () => stepResourcesViz(-1));
+    }
+    if (resNextBtn) {
+        resNextBtn.addEventListener('click', () => stepResourcesViz(1));
+    }
 
     let conceptVizRaf = null;
     let conceptVizT0 = 0;
     let conceptVizPage = null;
     let conceptVizPaused = false;
     let conceptVizFrozenElapsed = 0;
+    const RESOURCE_VIZ_STEP_MS = 5000;
+    const RESOURCE_VIZ_STEP_COUNT = 6;
     const lastConceptCodePhase = {};
 
     function syncConceptCodeHighlight(scrollId, phase) {
@@ -518,6 +538,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? (conceptVizPaused ? 'Paused' : 'Running')
                 : '';
         });
+        const prevBtn = document.getElementById('viz-btn-prev-os-resources');
+        const nextBtn = document.getElementById('viz-btn-next-os-resources');
+        const canStep = conceptVizPage === 'os-resources' && conceptVizPaused;
+        if (prevBtn) prevBtn.disabled = !canStep;
+        if (nextBtn) nextBtn.disabled = !canStep;
+    }
+
+    function stepResourcesViz(dir) {
+        if (conceptVizPage !== 'os-resources' || !conceptVizPaused) return;
+        const currentPhase = Math.floor(conceptVizFrozenElapsed / RESOURCE_VIZ_STEP_MS) % RESOURCE_VIZ_STEP_COUNT;
+        const nextPhase = (currentPhase + dir + RESOURCE_VIZ_STEP_COUNT) % RESOURCE_VIZ_STEP_COUNT;
+        conceptVizFrozenElapsed = nextPhase * RESOURCE_VIZ_STEP_MS;
+        updateOsResourcesViz(conceptVizFrozenElapsed);
+        updateResVizToolbar();
     }
 
     function pauseResourcesViz() {
@@ -853,9 +887,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (vizResMem) vizResMem.style.width = `${m.toFixed(1)}%`;
         if (vizResCpuLabel) vizResCpuLabel.textContent = `${c.toFixed(1)}%`;
         if (vizResMemLabel) vizResMemLabel.textContent = `${m.toFixed(1)}%`;
+        if (vizResCpuChip) vizResCpuChip.textContent = `${c.toFixed(1)}%`;
+        if (vizResMemChip) vizResMemChip.textContent = `${m.toFixed(1)}%`;
+        vizResSummaryValueNodes.forEach((node) => {
+            const kind = node.getAttribute('data-viz-res-summary-value');
+            if (kind === 'cpu') node.textContent = `${c.toFixed(1)}%`;
+            if (kind === 'mem') node.textContent = `${m.toFixed(1)}%`;
+        });
 
-        const STEP = 5000;
-        const phase = Math.floor(elapsed / STEP) % 6;
+        const phase = Math.floor(elapsed / RESOURCE_VIZ_STEP_MS) % RESOURCE_VIZ_STEP_COUNT;
         const resCodePhases = ['res-cpu-read', 'res-cpu-delta', 'res-mem', 'res-mem-pct', 'res-thread', 'res-alert'];
         const rk = resCodePhases[phase];
         syncConceptCodeHighlight('os-resources-code-scroll', rk);
@@ -863,6 +903,18 @@ document.addEventListener("DOMContentLoaded", () => {
         vizResPipeNodes.forEach((node) => {
             const i = parseInt(node.getAttribute('data-viz-res-pipe'), 10);
             node.classList.toggle('res-node-active', i === phase);
+        });
+        vizResScreenNodes.forEach((node) => {
+            const i = parseInt(node.getAttribute('data-viz-res-screen'), 10);
+            node.classList.toggle('is-active', i === phase);
+        });
+        vizResSummaryScreenNodes.forEach((node) => {
+            const i = parseInt(node.getAttribute('data-viz-res-summary-screen'), 10);
+            node.classList.toggle('is-active', i === phase);
+        });
+        const activeLane = ['cpu', 'cpu', 'mem', 'mem', 'proc', 'alert'][phase];
+        vizResLaneNodes.forEach((node) => {
+            node.classList.toggle('is-active', node.getAttribute('data-viz-res-lane') === activeLane);
         });
 
         const boxForPhase = ['cpu', 'cpu', 'mem', 'mem', 'proc', null];
@@ -873,6 +925,17 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         if (vizResAlertStrip) {
             vizResAlertStrip.classList.toggle('res-alert-hot', phase === 5);
+        }
+        if (vizResVideoAlert) {
+            const alertHot = c > 90 || m > 90 || phase === 5;
+            vizResVideoAlert.textContent = alertHot ? 'ALERT ARM' : 'NORMAL';
+            vizResVideoAlert.classList.toggle('is-hot', alertHot);
+            vizResSummaryValueNodes.forEach((node) => {
+                if (node.getAttribute('data-viz-res-summary-value') === 'alert') {
+                    node.textContent = alertHot ? 'ALERT ARM' : 'NORMAL';
+                    node.classList.toggle('is-hot', alertHot);
+                }
+            });
         }
 
         const u = Math.floor(elapsed / 200) % 10000;
@@ -901,6 +964,28 @@ document.addEventListener("DOMContentLoaded", () => {
         if (vizResCaption) {
             vizResCaption.textContent = captions[phase];
         }
+        if (vizResVideoTitle) {
+            const titles = [
+                'Sampling /proc/stat',
+                'Deriving CpuUsage',
+                'Reading /proc/meminfo',
+                'Computing MemoryInfo',
+                'Inspecting ProcessStats',
+                'Preparing alert emission',
+            ];
+            vizResVideoTitle.textContent = titles[phase];
+        }
+        if (vizResVideoSubtitle) {
+            const subtitles = [
+                'Kernel jiffies enter the monitor as raw counters.',
+                'The previous sample turns raw counters into a percentage.',
+                'Key-value memory data is parsed into the struct fields.',
+                'Available memory becomes a used-memory percentage.',
+                'Per-process stats provide PID, RSS, threads, and timing.',
+                'Threshold logic decides whether HIGH_CPU or HIGH_MEMORY is sent.',
+            ];
+            vizResVideoSubtitle.textContent = subtitles[phase];
+        }
 
         if (vizResPipelineAnim) {
             vizResPipelineAnim.dataset.phase = String(phase);
@@ -914,14 +999,17 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (resVizStepCaption) {
             const steps = [
-                '1 / 6 — struct CpuUsage · read jiffies',
-                '2 / 6 — Δ sample → cpu.usage_percent',
-                '3 / 6 — struct MemoryInfo · scan meminfo',
-                '4 / 6 — used vs total → mem.usage_percent',
-                '5 / 6 — ProcessStats · /proc/[pid]/stat',
-                '6 / 6 — alerts → send_event_to_backend',
+                'Step 1/6: Read CPU values from /proc/stat',
+                'Step 2/6: Compute CPU usage percentage',
+                'Step 3/6: Read memory values from /proc/meminfo',
+                'Step 4/6: Compute memory usage percentage',
+                'Step 5/6: Read per-process stats from /proc/[pid]/stat',
+                'Step 6/6: If threshold crossed, send HIGH_CPU/HIGH_MEMORY event',
             ];
             resVizStepCaption.textContent = steps[phase];
+        }
+        if (vizResVideoStep) {
+            vizResVideoStep.textContent = `Step ${phase + 1}/6`;
         }
     }
 
