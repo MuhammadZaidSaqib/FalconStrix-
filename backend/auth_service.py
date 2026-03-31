@@ -89,10 +89,18 @@ def register_user(username, password, db_connected=True):
         return None, 'Username may only use letters, numbers, underscore, hyphen, or dot.'
     if len(password or '') < 8:
         return None, 'Password must be at least 8 characters.'
+    pw = str(password or '')
+    uname_lower = username.lower()
+    if uname_lower and uname_lower in pw.lower():
+        return None, 'Password must not contain your username.'
+    if not re.search(r'\d', pw):
+        return None, 'Password must include at least one number.'
+    if not re.search(r'[^A-Za-z0-9]', pw):
+        return None, 'Password must include at least one symbol.'
     if username.lower() == DEFAULT_ADMIN.lower():
         return None, 'That username is reserved.'
 
-    ph = generate_password_hash(password)
+    ph = generate_password_hash(pw)
 
     if db_connected:
         ensure_password_column()
@@ -165,3 +173,31 @@ def verify_login_dashboard(username, password, db_connected=True):
             'role': row.get('role') or 'user',
         }
     return None
+
+
+def check_username_availability(username, db_connected=True):
+    """
+    Returns tuple: (available: bool, message: str)
+    """
+    username = (username or '').strip()
+    if len(username) < 3 or len(username) > 32:
+        return False, 'Username must be between 3 and 32 characters.'
+    if not re.fullmatch(r'[\w.-]+', username, flags=re.ASCII):
+        return False, 'Only letters, numbers, underscore, hyphen, or dot allowed.'
+    if username.lower() == DEFAULT_ADMIN.lower():
+        return False, "Username 'admin' is reserved."
+
+    if db_connected:
+        existing = fetch_query(
+            "SELECT user_id FROM Users WHERE LOWER(username) = LOWER(%s)",
+            (username,),
+            fetchall=False,
+        )
+        if existing:
+            return False, 'Username is already taken.'
+        return True, 'Username is available.'
+
+    _mock_users_init()
+    if username.lower() in _mock_users_by_key:
+        return False, 'Username is already taken.'
+    return True, 'Username is available.'

@@ -18,8 +18,8 @@
                 <div class="login-metrics">
                     <div class="login-metric-card">
                         <span class="metric-label">Policy</span>
-                        <strong>8+ chars</strong>
-                        <span class="metric-sub">Password minimum</span>
+                        <strong>8+ chars + # + 0-9</strong>
+                        <span class="metric-sub">No username in password</span>
                     </div>
                     <div class="login-metric-card">
                         <span class="metric-label">Role</span>
@@ -45,21 +45,80 @@
                 <form class="login-form" method="post" action="/signup" autocomplete="on">
                     <label class="login-label" for="username">Username</label>
                     <input class="login-input" type="text" id="username" name="username" required minlength="3" maxlength="32" autocomplete="username" autofocus placeholder="operator.id">
+                    <p id="username-availability" class="login-hint" style="margin:6px 0 10px; min-height: 1.2em;"></p>
 
                     <label class="login-label" for="password">Password</label>
-                    <input class="login-input" type="password" id="password" name="password" required minlength="8" autocomplete="new-password" placeholder="at least 8 characters">
+                    <div class="password-wrap">
+                        <input class="login-input" type="password" id="password" name="password" required minlength="8" autocomplete="new-password" placeholder="8+ chars, symbol, number">
+                        <button type="button" class="password-toggle" data-toggle-password="password" aria-label="Show password" title="Show/Hide password">👁</button>
+                    </div>
 
                     <label class="login-label" for="password_confirm">Confirm password</label>
-                    <input class="login-input" type="password" id="password_confirm" name="password_confirm" required minlength="8" autocomplete="new-password" placeholder="repeat password">
+                    <div class="password-wrap">
+                        <input class="login-input" type="password" id="password_confirm" name="password_confirm" required minlength="8" autocomplete="new-password" placeholder="repeat password">
+                        <button type="button" class="password-toggle" data-toggle-password="password_confirm" aria-label="Show confirm password" title="Show/Hide password">👁</button>
+                    </div>
 
                     <button type="submit" class="login-submit">Create account</button>
                 </form>
                 <div class="login-footnote">
                     <p class="login-alt">Already have an account? <a href="{{ url_for('login') }}">Sign in</a></p>
-                    <p class="login-hint">Admin account <code>admin</code> is reserved. Set <code>FALCON_DISABLE_SIGNUP=1</code> to close registration in production.</p>
+                    <p class="login-hint">Admin account <code>admin</code> is reserved. Password must include a symbol and number, and must not contain your username. Set <code>FALCON_DISABLE_SIGNUP=1</code> to close registration in production.</p>
                 </div>
             </section>
         </div>
     </div>
+    <script>
+        (() => {
+            const input = document.getElementById('username');
+            const hint = document.getElementById('username-availability');
+            if (!input || !hint) return;
+            let timer = null;
+            let seq = 0;
+            const setHint = (text, ok) => {
+                hint.textContent = text || '';
+                hint.style.color = ok == null ? '' : (ok ? '#7dffb0' : '#ff9b9b');
+            };
+            const check = async () => {
+                const username = (input.value || '').trim();
+                if (!username) {
+                    setHint('', null);
+                    return;
+                }
+                const id = ++seq;
+                setHint('Checking username...', null);
+                try {
+                    const res = await fetch(`/api/auth/username-availability?username=${encodeURIComponent(username)}`);
+                    if (res.redirected || (res.url && res.url.includes('/login'))) {
+                        setHint('Please refresh signup page and try again.', false);
+                        return;
+                    }
+                    const data = await res.json();
+                    if (id !== seq) return;
+                    setHint((data && data.message) || '', !!(data && data.available));
+                } catch (_) {
+                    if (id !== seq) return;
+                    setHint('Could not check username right now.', false);
+                }
+            };
+            input.addEventListener('input', () => {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(check, 260);
+            });
+            input.addEventListener('blur', check);
+
+            document.querySelectorAll('[data-toggle-password]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-toggle-password');
+                    const target = document.getElementById(id);
+                    if (!target) return;
+                    const show = target.type === 'password';
+                    target.type = show ? 'text' : 'password';
+                    btn.classList.toggle('is-visible', show);
+                    btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+                });
+            });
+        })();
+    </script>
 </body>
 </html>

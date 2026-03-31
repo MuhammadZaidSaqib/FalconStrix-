@@ -47,3 +47,61 @@ WHERE e.event_type = 'PROCESS_CREATE'
   AND e.timestamp >= NOW() - INTERVAL 1 HOUR
 GROUP BY p.process_name
 HAVING execution_count > 10;
+
+-- 5. Resolved Cases audit view (what/when/how + process metadata)
+SELECT
+    a.alert_id,
+    s.level_name AS severity,
+    e.event_type AS trigger_event,
+    a.timestamp AS detected_at,
+    p.process_name,
+    p.pid,
+    p.start_time AS process_created_at,
+    (
+        SELECT re.timestamp
+        FROM Events re
+        WHERE re.event_type IN ('RESPONSE_ACTION', 'PROCESS_KILLED')
+          AND (
+            (e.process_id IS NOT NULL AND re.process_id = e.process_id)
+            OR (re.description LIKE CONCAT('%%PID: ', p.pid, '%%'))
+            OR (re.description LIKE CONCAT('%%pid=', p.pid, '%%'))
+          )
+        ORDER BY re.timestamp DESC
+        LIMIT 1
+    ) AS resolved_at,
+    (
+        SELECT re.description
+        FROM Events re
+        WHERE re.event_type IN ('RESPONSE_ACTION', 'PROCESS_KILLED')
+          AND (
+            (e.process_id IS NOT NULL AND re.process_id = e.process_id)
+            OR (re.description LIKE CONCAT('%%PID: ', p.pid, '%%'))
+            OR (re.description LIKE CONCAT('%%pid=', p.pid, '%%'))
+          )
+        ORDER BY re.timestamp DESC
+        LIMIT 1
+    ) AS resolution_detail
+FROM Alerts a
+JOIN Severity s ON s.severity_id = a.severity_id
+JOIN Events e ON e.event_id = a.event_id
+LEFT JOIN Processes p ON p.process_id = e.process_id
+WHERE a.is_resolved = TRUE
+ORDER BY a.timestamp DESC
+LIMIT 250;
+
+-- 6. Terminated Processes audit view (who/when/action/process created)
+SELECT
+    e.timestamp AS terminated_at,
+    COALESCE(NULLIF(TRIM(u.username), ''), 'system') AS terminated_by,
+    e.event_type AS action_type,
+    p.process_name,
+    p.pid,
+    p.start_time AS process_created_at,
+    e.source,
+    COALESCE(NULLIF(TRIM(e.description), ''), 'Process termination event') AS details
+FROM Events e
+LEFT JOIN Users u ON u.user_id = e.user_id
+LEFT JOIN Processes p ON p.process_id = e.process_id
+WHERE e.event_type IN ('PROCESS_KILLED', 'RESPONSE_ACTION')
+ORDER BY e.timestamp DESC
+LIMIT 250;

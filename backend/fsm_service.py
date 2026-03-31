@@ -42,22 +42,20 @@ def update_fsm_state(new_state, reason, trigger_active_defense=True):
 
 def tick_fsm():
     """ Evaluate conditions to see if FSM must escalate or de-escalate """
-    # Count unresolved high/critical alerts in last 10 minutes
+    # Count unresolved high/critical alerts
     q = """
     SELECT COUNT(*) as cnt FROM Alerts a
     JOIN Severity s ON a.severity_id = s.severity_id
     WHERE a.is_resolved = FALSE AND s.level_name IN ('HIGH', 'CRITICAL')
-      AND a.timestamp >= NOW() - INTERVAL 10 MINUTE
     """
     res = fetch_query(q, fetchall=False)
     high_alerts = res['cnt'] if res else 0
 
-    # Count recent medium alerts
+    # Count unresolved medium alerts
     q2 = """
     SELECT COUNT(*) as cnt FROM Alerts a
     JOIN Severity s ON a.severity_id = s.severity_id
     WHERE a.is_resolved = FALSE AND s.level_name = 'MEDIUM'
-      AND a.timestamp >= NOW() - INTERVAL 10 MINUTE
     """
     res2 = fetch_query(q2, fetchall=False)
     med_alerts = res2['cnt'] if res2 else 0
@@ -68,8 +66,27 @@ def tick_fsm():
         update_fsm_state('LOCKED', 'Repeated abnormal behaviors/critical alerts detected')
     elif high_alerts == 1 or med_alerts >= 3:
         update_fsm_state('WARNING', 'Multiple suspicious events detected')
-    elif high_alerts == 0 and med_alerts < 3 and current_state != 'NORMAL':
+    # Do not auto-unlock LOCKED. That must be done by an authenticated admin
+    # after resolving the active alert cases.
+    elif high_alerts == 0 and med_alerts < 3 and current_state not in ('NORMAL', 'LOCKED'):
         update_fsm_state('NORMAL', 'De-escalation: no sustained high/medium alerts in window', trigger_active_defense=False)
+
+def maybe_unlock_locked_state(actor_username='unknown'):
+    """
+    Admin-only workflow uses this after resolving alerts:
+    LOCKED -> NORMAL only when there are no unresolved alerts remaining.
+    """
+    unresolved_q = "SELECT COUNT(*) AS cnt FROM Alerts WHERE is_resolved = FALSE"
+    unresolved = fetch_query(unresolved_q, fetchall=False)
+    unresolved_cnt = int(unresolved['cnt']) if unresolved and unresolved.get('cnt') is not None else 0
+    curr = get_current_state()
+    if curr != 'LOCKED':
+        return {'changed': False, 'reason': f'FSM is {curr}, no lock-clear needed'}
+    if unresolved_cnt > 0:
+        return {'changed': False, 'reason': f'{unresolved_cnt} unresolved alert(s) remain'}
+    reason = f"Admin '{actor_username}' resolved active cases and cleared LOCKED state"
+    update_fsm_state('NORMAL', reason, trigger_active_defense=False)
+    return {'changed': True, 'reason': reason}
 
 def hardware_led_indicator(state):
     """ Simulates physical FSM hardware LEDs via print statements """

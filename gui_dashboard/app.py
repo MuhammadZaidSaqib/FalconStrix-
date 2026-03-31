@@ -3,6 +3,7 @@ import os
 import time
 import random
 import json
+import re
 from collections import deque
 from datetime import datetime, timedelta
 from flask import (
@@ -387,13 +388,38 @@ def _activity_icon_class(event_type, description):
     d = (description or '').upper()
     if 'FAIL' in et or 'BRUTE' in d or 'DENIED' in d or 'LOCKOUT' in et or 'FSM LOCK' in d:
         return 'red'
-    if 'SIGNUP' in et or 'FILE' in et or 'ACCESS' in d or 'IPC' in et or 'PROCESS' in et:
+    if (
+        'SIGNUP' in et
+        or 'FILE' in et
+        or 'ACCESS' in d
+        or 'IPC' in et
+        or 'PROCESS' in et
+        or 'CSV' in et
+        or 'REPORT' in et
+    ):
         return 'blue'
     return 'gray'
 
 
-def record_dashboard_auth_event(event_type, description, user_id=None, actor_username=None):
-    """Persist LOGIN / LOGOUT / AUTH_FAILED / SIGNUP for User Activity (DB + in-memory ring)."""
+def _extract_actor_username(actor_username, description):
+    actor = (str(actor_username or '')).strip()
+    if actor:
+        return actor
+    desc = str(description or '')
+    patterns = (
+        r"User\s+'([^']+)'",
+        r'\bby\s+([A-Za-z0-9_.-]+)',
+        r'\bfor\s+([A-Za-z0-9_.-]+)',
+    )
+    for pat in patterns:
+        m = re.search(pat, desc, flags=re.IGNORECASE)
+        if m and m.group(1):
+            return m.group(1).strip()
+    return None
+
+
+def record_user_activity_event(event_type, description, user_id=None, actor_username=None):
+    """Persist dashboard user activity to DB (when available) + in-memory ring."""
     if DB_AVAILABLE:
         try:
             from event_service import log_event
@@ -412,6 +438,11 @@ def record_dashboard_auth_event(event_type, description, user_id=None, actor_use
     )
 
 
+def record_dashboard_auth_event(event_type, description, user_id=None, actor_username=None):
+    """Compatibility wrapper for auth-related activity events."""
+    record_user_activity_event(event_type, description, user_id=user_id, actor_username=actor_username)
+
+
 def _rows_to_activity_items(rows):
     out = []
     for row in rows or []:
@@ -426,7 +457,7 @@ def _rows_to_activity_items(rows):
             icon = '✚'
         else:
             icon = '⚠' if ic == 'red' else ('📄' if ic == 'blue' else '👤')
-        actor = (row.get('actor_username') or '').strip() or None
+        actor = _extract_actor_username(row.get('actor_username'), desc)
         out.append(
             {
                 'event_type': row.get('event_type'),
@@ -442,13 +473,44 @@ def _rows_to_activity_items(rows):
 
 def build_user_activity_list(recent_events):
     """Recent auth/session rows for the User Activity widget."""
+    def _ring_items(limit=8):
+        out = []
+        for item in auth_activity_ring:
+            desc = (item.get('description') or item.get('event_type') or 'Event').strip()
+            et = item.get('event_type') or 'EVENT'
+            ic = _activity_icon_class(et, desc)
+            etu = (et or '').upper()
+            if etu == 'AUTH_LOCKOUT':
+                icon = '🔒'
+            elif etu == 'SIGNUP':
+                icon = '✚'
+            else:
+                icon = '⚠' if ic == 'red' else ('📄' if ic == 'blue' else '👤')
+            actor = _extract_actor_username(item.get('username'), desc)
+            out.append(
+                {
+                    'event_type': et,
+                    'description': desc[:120],
+                    'timestamp': _fmt_clock(item.get('ts')),
+                    'icon': ic,
+                    'icon_char': icon,
+                    'actor': actor,
+                }
+            )
+            if len(out) >= limit:
+                break
+        return out
+
     if DB_AVAILABLE:
         rows = get_db_data_safely(
             lambda: fetch_query(
                 """SELECT e.event_type, e.description, e.timestamp, u.username AS actor_username
                    FROM Events e
                    LEFT JOIN Users u ON e.user_id = u.user_id
-                   WHERE e.event_type IN ('LOGIN', 'LOGOUT', 'AUTH_FAILED', 'AUTH_LOCKOUT', 'SIGNUP')
+                   WHERE e.event_type IN (
+                        'LOGIN', 'LOGOUT', 'AUTH_FAILED', 'AUTH_LOCKOUT', 'SIGNUP',
+                        'PROCESS_KILLED', 'CASE_RESOLVED', 'CSV_EXPORT', 'REPORT_GENERATED'
+                   )
                    ORDER BY e.timestamp DESC LIMIT 8"""
             ),
             [],
@@ -463,33 +525,28 @@ def build_user_activity_list(recent_events):
                 ),
                 [],
             )
-        out = _rows_to_activity_items(rows)
-        return out if out else [{'event_type': 'INFO', 'description': 'No events yet', 'timestamp': '—', 'icon': 'gray', 'icon_char': 'ℹ', 'actor': None}]
+        db_items = _rows_to_activity_items(rows)
+        ring_items = _ring_items(8)
+        merged = []
+        seen = set()
+        for item in ring_items + db_items:
+            key = (
+                str(item.get('event_type') or ''),
+                str(item.get('description') or ''),
+                str(item.get('timestamp') or ''),
+                str(item.get('actor') or ''),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(item)
+            if len(merged) >= 8:
+                break
+        return merged if merged else [{'event_type': 'INFO', 'description': 'No events yet', 'timestamp': '—', 'icon': 'gray', 'icon_char': 'ℹ', 'actor': None}]
 
-    out = []
-    for item in auth_activity_ring:
-        desc = (item.get('description') or item.get('event_type') or 'Event').strip()
-        et = item.get('event_type') or 'EVENT'
-        ic = _activity_icon_class(et, desc)
-        if (et or '').upper() == 'AUTH_LOCKOUT':
-            icon = '🔒'
-        elif (et or '').upper() == 'SIGNUP':
-            icon = '✚'
-        else:
-            icon = '⚠' if ic == 'red' else ('📄' if ic == 'blue' else '👤')
-        actor = (item.get('username') or '').strip() or None
-        out.append(
-            {
-                'event_type': et,
-                'description': desc[:120],
-                'timestamp': _fmt_clock(item.get('ts')),
-                'icon': ic,
-                'icon_char': icon,
-                'actor': actor,
-            }
-        )
-        if len(out) >= 8:
-            return out
+    out = _ring_items(8)
+    if len(out) >= 8:
+        return out
     for ev in recent_events or []:
         if len(out) >= 8:
             break
@@ -502,7 +559,7 @@ def build_user_activity_list(recent_events):
                 'timestamp': ev.get('timestamp') or '—',
                 'icon': _activity_icon_class(et, desc),
                 'icon_char': 'ℹ',
-                'actor': None,
+                'actor': _extract_actor_username(ev.get('actor_username'), desc),
             }
         )
     if not out:
@@ -614,6 +671,120 @@ def build_incident_summary_list(active_alerts, recent_events):
     return out[:limit]
 
 
+def get_resolved_cases_rows(limit=200):
+    if not DB_AVAILABLE:
+        return [
+            {
+                'alert_id': 9001,
+                'severity': 'HIGH',
+                'trigger_event': 'SUSPICIOUS_PROC',
+                'detected_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'resolved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'resolution_detail': 'SIGKILL delivered (LOCKED response)',
+                'process_name': 'netcat',
+                'pid': 8842,
+                'process_created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+            }
+        ]
+    rows = get_db_data_safely(
+        lambda: fetch_query(
+            """
+            SELECT
+                a.alert_id,
+                s.level_name AS severity,
+                e.event_type AS trigger_event,
+                a.timestamp AS detected_at,
+                p.process_name,
+                p.pid,
+                p.start_time AS process_created_at,
+                (
+                    SELECT re.timestamp
+                    FROM Events re
+                    WHERE re.event_type IN ('RESPONSE_ACTION', 'PROCESS_KILLED', 'CASE_RESOLVED')
+                      AND (
+                        (e.process_id IS NOT NULL AND re.process_id = e.process_id)
+                        OR (re.description LIKE CONCAT('%%PID: ', p.pid, '%%'))
+                        OR (re.description LIKE CONCAT('%%pid=', p.pid, '%%'))
+                      )
+                    ORDER BY re.timestamp DESC
+                    LIMIT 1
+                ) AS resolved_at,
+                (
+                    SELECT re.description
+                    FROM Events re
+                    WHERE re.event_type IN ('RESPONSE_ACTION', 'PROCESS_KILLED', 'CASE_RESOLVED')
+                      AND (
+                        (e.process_id IS NOT NULL AND re.process_id = e.process_id)
+                        OR (re.description LIKE CONCAT('%%PID: ', p.pid, '%%'))
+                        OR (re.description LIKE CONCAT('%%pid=', p.pid, '%%'))
+                      )
+                    ORDER BY re.timestamp DESC
+                    LIMIT 1
+                ) AS resolution_detail
+            FROM Alerts a
+            JOIN Severity s ON s.severity_id = a.severity_id
+            JOIN Events e ON e.event_id = a.event_id
+            LEFT JOIN Processes p ON p.process_id = e.process_id
+            WHERE a.is_resolved = TRUE
+            ORDER BY a.timestamp DESC
+            LIMIT %s
+            """,
+            (limit,),
+        ),
+        [],
+    )
+    for r in rows:
+        for k in ('detected_at', 'resolved_at', 'process_created_at'):
+            if hasattr(r.get(k), 'strftime'):
+                r[k] = r[k].strftime('%Y-%m-%d %H:%M:%S')
+    return rows
+
+
+def get_terminated_process_rows(limit=250):
+    if not DB_AVAILABLE:
+        now = time.strftime('%Y-%m-%d %H:%M:%S')
+        return [
+            {
+                'terminated_at': now,
+                'terminated_by': 'system',
+                'action_type': 'PROCESS_KILLED',
+                'process_name': 'unknown',
+                'pid': 0,
+                'process_created_at': now,
+                'source': 'SOC-Dashboard',
+                'details': 'Mock mode sample',
+            }
+        ]
+    rows = get_db_data_safely(
+        lambda: fetch_query(
+            """
+            SELECT
+                e.timestamp AS terminated_at,
+                COALESCE(NULLIF(TRIM(u.username), ''), 'system') AS terminated_by,
+                e.event_type AS action_type,
+                p.process_name,
+                p.pid,
+                p.start_time AS process_created_at,
+                e.source,
+                COALESCE(NULLIF(TRIM(e.description), ''), 'Process termination event') AS details
+            FROM Events e
+            LEFT JOIN Users u ON u.user_id = e.user_id
+            LEFT JOIN Processes p ON p.process_id = e.process_id
+            WHERE e.event_type IN ('PROCESS_KILLED', 'RESPONSE_ACTION')
+            ORDER BY e.timestamp DESC
+            LIMIT %s
+            """,
+            (limit,),
+        ),
+        [],
+    )
+    for r in rows:
+        for k in ('terminated_at', 'process_created_at'):
+            if hasattr(r.get(k), 'strftime'):
+                r[k] = r[k].strftime('%Y-%m-%d %H:%M:%S')
+    return rows
+
+
 def network_poll_thread():
     """Push network counters periodically — lighter load than sub-second polling."""
     while True:
@@ -698,6 +869,8 @@ def build_dashboard_snapshot(current_state):
         
         res = fetch_query("SELECT COUNT(*) as cnt FROM Events WHERE event_type IN ('RESPONSE_ACTION', 'PROCESS_KILLED') AND timestamp >= NOW() - INTERVAL 1 DAY", fetchall=False)
         kill_cnt = res['cnt'] if res and 'cnt' in res else 0
+        resolved_res = fetch_query("SELECT COUNT(*) as cnt FROM Alerts WHERE is_resolved = TRUE", fetchall=False)
+        resolved_cases = resolved_res['cnt'] if resolved_res and 'cnt' in resolved_res else 0
         ipc_res = fetch_query("SELECT COUNT(*) as cnt FROM Events WHERE timestamp >= NOW() - INTERVAL 1 HOUR", fetchall=False)
         ipc_total = ipc_res['cnt'] if ipc_res and 'cnt' in ipc_res else 0
     else:
@@ -705,12 +878,14 @@ def build_dashboard_snapshot(current_state):
             {'previous_state': 'NORMAL', 'new_state': 'NORMAL', 'reason': 'System Init (Mock)', 'changed_at': time.strftime('%H:%M:%S')}
         ]
         state_history = list(mock_fsm_auth_history) + base_mock_hist
-        kill_cnt, ipc_total = 12, 412
+        kill_cnt, resolved_cases, ipc_total = 12, 128, 412
 
     update_network_stats()
     incident_trends = build_incident_trends()
     user_activity = build_user_activity_list(recent_events)
     incident_summary = build_incident_summary_list(active_alerts, recent_events)
+    resolved_cases_rows = get_resolved_cases_rows(250)
+    terminated_process_rows = get_terminated_process_rows(250)
 
     recent_alerts_widget = get_db_data_safely(lambda: get_recent_alerts_for_dashboard(7, 5), []) or []
     if not DB_AVAILABLE:
@@ -727,13 +902,15 @@ def build_dashboard_snapshot(current_state):
 
     return {
         'state': current_state, 'active_alerts': active_alerts, 'recent_alerts': recent_alerts_widget, 'recent_events': recent_events, 'severity_counts': severity_counts,
-        'state_history': state_history, 'kill_cnt': kill_cnt, 'ipc_total': ipc_total,
+        'state_history': state_history, 'kill_cnt': kill_cnt, 'resolved_cases': resolved_cases, 'ipc_total': ipc_total,
         'devices': [{'name': 'Firewall-Main', 'status': 'Online', 'health': 'green'}, {'name': os.environ.get('COMPUTERNAME', 'LOCAL-HOST'), 'status': 'At Risk' if severity_counts['HIGH'] > 0 else 'Online', 'health': 'green'}],
         'network': {'in': net_stats['in_speed'], 'out': net_stats['out_speed'], 'total_in': f"{net_stats['total_in']:.2f} GB", 'total_out': f"{net_stats['total_out']:.2f} GB"}, 'resources': get_real_resources(),
         'processes': get_process_list(),
         'incident_trends': incident_trends,
         'user_activity': user_activity,
         'incident_summary': incident_summary,
+        'resolved_cases_rows': resolved_cases_rows,
+        'terminated_process_rows': terminated_process_rows,
     }
 
 
@@ -758,6 +935,7 @@ def make_snapshot_signature(snapshot):
         ],
         'severity_counts': snapshot.get('severity_counts'),
         'kill_cnt': snapshot.get('kill_cnt'),
+        'resolved_cases': snapshot.get('resolved_cases'),
         'ipc_total': snapshot.get('ipc_total'),
         'network': snapshot.get('network'),
         'resources': snapshot.get('resources'),
@@ -772,6 +950,26 @@ def make_snapshot_signature(snapshot):
         'incident_summary': [
             (s.get('title'), s.get('time'))
             for s in snapshot.get('incident_summary', [])
+        ],
+        'resolved_cases_rows': [
+            (
+                r.get('alert_id'),
+                r.get('severity'),
+                r.get('trigger_event'),
+                r.get('detected_at'),
+                r.get('resolved_at'),
+                r.get('pid'),
+            )
+            for r in snapshot.get('resolved_cases_rows', [])
+        ],
+        'terminated_process_rows': [
+            (
+                r.get('terminated_at'),
+                r.get('terminated_by'),
+                r.get('action_type'),
+                r.get('pid'),
+            )
+            for r in snapshot.get('terminated_process_rows', [])
         ],
         'incident_trends': (
             tuple(snapshot.get('incident_trends', {}).get('weekly', {}).get('resolved', [])),
@@ -826,6 +1024,7 @@ def background_thread():
                     'active_alerts': len(snapshot['active_alerts']),
                     'severity_counts': snapshot['severity_counts'],
                     'kill_cnt': snapshot['kill_cnt'],
+                    'resolved_cases': snapshot.get('resolved_cases', 0),
                     'network': snapshot['network']
                 })
                 _debug_log(
@@ -851,6 +1050,8 @@ def handle_scan():
 def handle_kill(data):
     pid = data.get('pid')
     name = data.get('name')
+    uid = session.get('user_id')
+    uname = session.get('username') or 'unknown'
     print(f"[SOC] REQ: Kill process {name} (PID: {pid})")
     _debug_log('kill_process_req', {'pid': pid, 'name': name})
     with open("kill_debug.log", "a") as f:
@@ -861,8 +1062,27 @@ def handle_kill(data):
             proc.terminate()
             if DB_AVAILABLE:
                 from event_service import log_event
-                log_event("PROCESS_KILLED", f"User manually terminated suspicious process: {name} (PID: {pid})", "SOC-Dashboard")
+                log_event(
+                    "PROCESS_KILLED",
+                    f"User '{uname}' manually terminated suspicious process: {name} (PID: {pid})",
+                    "SOC-Dashboard",
+                    user_id=uid,
+                )
+            record_user_activity_event(
+                "PROCESS_KILLED",
+                f"User '{uname}' manually terminated suspicious process: {name} (PID: {pid})",
+                user_id=uid,
+                actor_username=uname,
+            )
             socketio.emit('alert_msg', {'type': 'success', 'text': f'Process {name} ({pid}) terminated.'})
+            try:
+                st = get_effective_fsm_state()
+                snap = build_dashboard_snapshot(st)
+                global last_dashboard_snapshot
+                last_dashboard_snapshot = snap
+                socketio.emit('dashboard_snapshot', snap)
+            except Exception as emit_ex:
+                print(f"kill snapshot emit error: {emit_ex}")
             _debug_log('kill_process_success', {'pid': pid, 'name': name})
         else:
             socketio.emit('alert_msg', {'type': 'error', 'text': 'Kill failed: psutil unavailable.'})
@@ -877,8 +1097,9 @@ def require_dashboard_login():
     # Socket.IO 'connect' handler / session, not by HTTP redirects.
     if (
         request.path.startswith('/api/debug')
+        or request.path.startswith('/api/auth/')
         or request.path.startswith('/socket.io')
-        or request.endpoint in ('login', 'signup', 'static')
+        or request.endpoint in ('login', 'signup', 'static', 'api_username_availability')
         or request.path.startswith('/static/')
     ):
         return None
@@ -985,6 +1206,17 @@ def signup():
     return render_template('signup.html')
 
 
+@app.route('/api/auth/username-availability')
+def api_username_availability():
+    username = (request.args.get('username') or '').strip()
+    try:
+        from auth_service import check_username_availability
+        ok, msg = check_username_availability(username, DB_AVAILABLE)
+        return jsonify({'ok': True, 'available': bool(ok), 'message': msg})
+    except Exception as e:
+        return jsonify({'ok': False, 'available': False, 'message': str(e)}), 500
+
+
 @app.route('/logout', methods=['POST'])
 def logout():
     uid = session.get('user_id')
@@ -1002,7 +1234,11 @@ def logout():
 
 @app.route('/')
 def index():
-    return render_template('dashboard.html', username=session.get('username', 'Operator'))
+    return render_template(
+        'dashboard.html',
+        username=session.get('username', 'Operator'),
+        user_role=(session.get('role') or 'user'),
+    )
 
 
 @app.route('/api/ipc/status')
@@ -1032,6 +1268,78 @@ def api_dashboard_snapshot():
         return jsonify(snap)
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/alerts/<int:alert_id>/resolve', methods=['POST'])
+def api_resolve_alert_case(alert_id):
+    """
+    Resolve a live alert case from dashboard.
+    LOCKED -> NORMAL requires authenticated admin + no unresolved cases left.
+    """
+    actor = session.get('username') or 'unknown'
+    role = (session.get('role') or 'user').lower()
+    actor_uid = session.get('user_id')
+    try:
+        from process_service import resolve_alert_case
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'resolve service unavailable: {e}'}), 500
+
+    try:
+        result = resolve_alert_case(
+            alert_id=alert_id,
+            actor_username=actor,
+            actor_role=role,
+            actor_user_id=actor_uid,
+        )
+        status = int(result.get('status', 200))
+        if not result.get('ok'):
+            return jsonify(result), status
+        record_user_activity_event(
+            'CASE_RESOLVED',
+            f"User '{actor}' resolved case #{alert_id}",
+            user_id=actor_uid,
+            actor_username=actor,
+        )
+
+        # Push fresh snapshot immediately so Live Alerts / Resolved Cases update.
+        st = get_effective_fsm_state()
+        snap = build_dashboard_snapshot(st)
+        global last_dashboard_snapshot
+        last_dashboard_snapshot = snap
+        socketio.emit('dashboard_snapshot', snap)
+        return jsonify({'ok': True, 'result': result, 'snapshot': snap}), 200
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/audit/action', methods=['POST'])
+def api_audit_action():
+    """
+    Record user-driven dashboard actions (CSV export/report generation/etc.)
+    so they appear in User Activity.
+    """
+    uid = session.get('user_id')
+    uname = session.get('username')
+    if not uid or not uname:
+        return jsonify({'ok': False, 'message': 'Authentication required'}), 401
+    payload = request.get_json(silent=True) or {}
+    event_type = str(payload.get('event_type') or '').strip().upper()[:64]
+    description = str(payload.get('description') or '').strip()[:300]
+    allowed = {'CSV_EXPORT', 'REPORT_GENERATED', 'PROCESS_KILL_REQUEST', 'CASE_RESOLVE_REQUEST'}
+    if event_type not in allowed:
+        return jsonify({'ok': False, 'message': 'Unsupported audit event type'}), 400
+    if not description:
+        description = f'{event_type} by {uname}'
+    record_user_activity_event(event_type, description, user_id=uid, actor_username=uname)
+    try:
+        st = get_effective_fsm_state()
+        snap = build_dashboard_snapshot(st)
+        global last_dashboard_snapshot
+        last_dashboard_snapshot = snap
+        socketio.emit('dashboard_snapshot', snap)
+    except Exception as emit_ex:
+        print(f"audit snapshot emit error: {emit_ex}")
+    return jsonify({'ok': True})
 
 
 @app.route('/api/debug/events')

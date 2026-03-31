@@ -2392,6 +2392,24 @@ header {
 .alerts-table tr.sev-HIGH td:nth-child(7) { color: #ffa657; font-weight: bold; }
 .alerts-table tr.sev-MEDIUM td:nth-child(7) { color: #d29922; font-weight: bold; }
 .alerts-table tr.sev-LOW td:nth-child(7) { color: #3fb950; font-weight: bold; }
+.resolve-case-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 195, 255, 0.45);
+    background: rgba(0, 195, 255, 0.12);
+    color: #bfeaff;
+    font-size: 0.73rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.resolve-case-btn:hover {
+    border-color: rgba(0, 195, 255, 0.72);
+    background: rgba(0, 195, 255, 0.2);
+}
+.resolve-case-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
 
 /* ═══ SYSTEM PROCESS MONITOR ═══════════════════════════════════════════ */
 .process-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85rem; }
@@ -2480,6 +2498,36 @@ header {
     outline: none;
     border-color: rgba(255, 77, 87, 0.45);
     box-shadow: 0 0 0 2px rgba(255, 77, 87, 0.12);
+}
+.password-wrap {
+    position: relative;
+}
+.password-wrap .login-input {
+    padding-right: 44px;
+}
+.password-toggle {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--muted-text);
+    border-radius: 6px;
+    width: 30px;
+    height: 28px;
+    cursor: pointer;
+    font-size: 0.86rem;
+    line-height: 1;
+}
+.password-toggle:hover {
+    color: var(--text-bright);
+    border-color: rgba(255, 77, 87, 0.35);
+}
+.password-toggle.is-visible {
+    color: #60a5fa;
+    border-color: rgba(96, 165, 250, 0.55);
+    box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.18);
 }
 .login-submit {
     width: 100%;

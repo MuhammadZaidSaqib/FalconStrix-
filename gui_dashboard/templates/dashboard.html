@@ -6,7 +6,7 @@
     <script>if ('scrollRestoration' in history) history.scrollRestoration = 'manual';</script>
     <title>FalconStrix — SOC Dashboard</title>
     <meta name="description" content="Hybrid Behavioral Cybersecurity SOC Command Center with OS-Level Integration">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260330o') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260330q') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
@@ -29,7 +29,7 @@
                 <div class="nav-section-label">Monitoring</div>
                 <button class="nav-item active" data-page="dashboard" id="nav-dashboard"><span class="nav-text">Dashboard</span></button>
                 <button class="nav-item" data-page="alerts" id="nav-alerts"><span class="nav-text">Live Alerts</span><span class="nav-badge" id="sidebar-alert-count">0</span></button>
-                <button class="nav-item" data-page="resolved-cases" id="nav-resolved-cases"><span class="nav-text">Resolved Cases</span></button>
+                <button class="nav-item" data-page="resolved-cases" id="nav-resolved-cases"><span class="nav-text">System Process Monitor</span></button>
                 <button class="nav-item" data-page="terminated-processes" id="nav-terminated-processes"><span class="nav-text">Terminated Processes</span></button>
                 <button class="nav-item" data-page="events" id="nav-events"><span class="nav-text">Events Log</span></button>
                 <button class="nav-item" data-page="process-monitor" id="nav-process-monitor"><span class="nav-text">Process Monitor</span><span class="nav-badge" style="background:#00c3ff">LIVE</span></button>
@@ -89,7 +89,7 @@
                                     <div class="ov-right"><strong id="dash-active-threats" class="ov-val red-text">16</strong> <span class="ov-arrow">›</span></div>
                                 </div>
                                 <div class="ov-item" onclick="switchPage('resolved-cases')" style="cursor: pointer;">
-                                    <div class="ov-left"><span class="ov-icon green">✔</span> <span class="ov-name">Resolved Cases</span></div>
+                                    <div class="ov-left"><span class="ov-icon green">✔</span> <span class="ov-name">System Process Monitor</span></div>
                                     <div class="ov-right"><strong id="dash-resolved" class="ov-val green-text">128</strong> <span class="ov-arrow">›</span></div>
                                 </div>
                                 <div class="ov-item" onclick="switchPage('terminated-processes')" style="cursor: pointer;">
@@ -321,6 +321,7 @@
                                     <th>Description</th>
                                     <th>Level</th>
                                     <th>Rule ID</th>
+                                    <th id="alert-action-th">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="alert-list-table">
@@ -334,7 +335,7 @@
             <!-- ════════ PAGE: RESOLVED CASES ════════ -->
             <main id="page-resolved-cases" class="page">
                 <section class="panel feed-container">
-                    <div class="panel-heading"><h2>Resolved Cases Audit</h2></div>
+                    <div class="panel-heading"><h2>System Process Monitor</h2></div>
                     <div class="table-filters">
                         <input id="resolved-filter-case-id" type="text" placeholder="Case ID" />
                         <input id="resolved-filter-text" type="text" placeholder="Search (event/process/how)" />
@@ -1447,7 +1448,11 @@ void trigger_response(int pid) {
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js', v='20260330o') }}"></script>
+    <script>
+        window.FALCON_USER_ROLE = "{{ (user_role or 'user')|e }}";
+        window.FALCON_USERNAME = "{{ (username or '')|e }}";
+    </script>
+    <script src="{{ url_for('static', filename='script.js', v='20260331a') }}"></script>
 </body>
 </html>
 

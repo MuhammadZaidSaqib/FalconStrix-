@@ -40,7 +40,7 @@ def get_recent_alerts_for_dashboard(days=7, limit=5):
     Time-bounded alerts for the dashboard 'Recent Alerts' column (includes resolved).
     """
     query = """
-    SELECT a.alert_id, s.level_name as severity, a.message, a.timestamp, e.event_type
+    SELECT a.alert_id, s.level_name as severity, a.message, a.timestamp, e.event_type, a.is_resolved
     FROM Alerts a
     JOIN Severity s ON a.severity_id = s.severity_id
     JOIN Events e ON a.event_id = e.event_id

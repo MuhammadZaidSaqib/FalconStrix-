@@ -13,6 +13,9 @@ function scrollAppToTop() {
 
 document.addEventListener("DOMContentLoaded", () => {
     scrollAppToTop();
+    const currentUserRole = String(window.FALCON_USER_ROLE || 'user').toLowerCase();
+    const currentUsername = String(window.FALCON_USERNAME || '').toLowerCase();
+    const canResolveCases = true;
 
     const socket = io();
 
@@ -56,7 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const pageTitles = {
         'dashboard': 'Dashboard',
         'alerts': 'Live Alerts',
-        'resolved-cases': 'Resolved Cases Audit',
+        'resolved-cases': 'System Process Monitor',
         'terminated-processes': 'Terminated Processes Audit',
         'events': 'Events Log',
         'fsm': 'FSM State Machine',
@@ -1386,23 +1389,131 @@ document.addEventListener("DOMContentLoaded", () => {
         if (listEl) listEl.innerHTML = `<li class="empty-state">${message}</li>`;
     };
 
+    const escHtml = (s) =>
+        String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/"/g, '&quot;');
+
+    const renderUserActivity = (items = []) => {
+        const userList = document.querySelector('.user-list');
+        if (!userList) return;
+        const escUa = (s) =>
+            String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/"/g, '&quot;');
+        if (!Array.isArray(items) || !items.length) {
+            userList.innerHTML = '<div class="ul-item"><span>No recent user activity</span></div>';
+            return;
+        }
+        userList.innerHTML = items.map((u) => {
+            const ic = u.icon || 'gray';
+            const sym = u.icon_char || '👤';
+            const actor = u.actor
+                ? `<span class="ul-actor">${escUa(u.actor)}</span><span class="ul-sep">·</span>`
+                : '';
+            const text = escUa(u.description || u.event_type);
+            return `<div class="ul-item"><span class="ul-icon ${ic}">${sym}</span><span class="ul-line">${actor}<span>${text}</span></span><span class="ul-time">${escUa(u.timestamp || '')} ›</span></div>`;
+        }).join('');
+    };
+
+    const resolveLiveAlertCase = async (alertId, buttonEl) => {
+        const idNum = Number(alertId);
+        if (!Number.isFinite(idNum) || idNum <= 0) return;
+        if (buttonEl) {
+            buttonEl.disabled = true;
+            buttonEl.textContent = 'Resolving...';
+        }
+        try {
+            const res = await fetch(`/api/alerts/${idNum}/resolve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+            });
+            const raw = await res.text();
+            let data = null;
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch (_) {
+                data = null;
+            }
+
+            if (!res.ok || !data || !data.ok) {
+                let msg = 'Failed to resolve case';
+                if (data && (data.message || data.error)) {
+                    msg = data.message || data.error;
+                } else if (res.status === 404) {
+                    msg = 'Resolve API not found (restart gui_dashboard/app.py to load latest routes).';
+                } else if (res.status === 401 || res.status === 403) {
+                    msg = 'Session/permissions issue. Login as admin to solve while LOCKED.';
+                } else if (raw && raw.trim().startsWith('<!doctype')) {
+                    msg = 'Server returned HTML instead of JSON. Please refresh and restart app.py.';
+                }
+                alert(msg);
+                if (buttonEl) {
+                    buttonEl.disabled = false;
+                    buttonEl.textContent = 'Solve';
+                }
+                return;
+            }
+            // Use immediate snapshot from backend if returned.
+            if (data.snapshot) {
+                applyGlobalStateUi(data.snapshot.state);
+                applySeverityCounts(data.snapshot.severity_counts || {});
+                renderAlerts(data.snapshot.active_alerts || [], data.snapshot.recent_alerts || []);
+                renderResolvedCases(data.snapshot.resolved_cases_rows || []);
+                renderUserActivity(data.snapshot.user_activity || []);
+                renderEvents(data.snapshot.recent_events || []);
+                renderStateHistory(data.snapshot.state_history || []);
+                renderTerminatedProcesses(data.snapshot.terminated_process_rows || []);
+                const dashResolved = document.getElementById('dash-resolved');
+                if (dashResolved) dashResolved.textContent = data.snapshot.resolved_cases || 0;
+                if (sidebarAlertCount) sidebarAlertCount.textContent = (data.snapshot.active_alerts || []).length;
+            } else {
+                fetch('/api/dashboard_snapshot')
+                    .then((r) => r.json())
+                    .then((snap) => {
+                        renderAlerts((snap && snap.active_alerts) || [], (snap && snap.recent_alerts) || []);
+                        renderResolvedCases((snap && snap.resolved_cases_rows) || []);
+                        renderUserActivity((snap && snap.user_activity) || []);
+                    })
+                    .catch(() => {});
+            }
+            alert('Case solved and moved to Resolved Cases.');
+        } catch (err) {
+            alert(`Resolve failed: ${err}`);
+            if (buttonEl) {
+                buttonEl.disabled = false;
+                buttonEl.textContent = 'Solve';
+            }
+        }
+    };
+
     const renderAlerts = (alerts = [], recentForSidebar = null) => {
         const tableBody = document.getElementById('alert-list-table');
+        const actionTh = document.getElementById('alert-action-th');
+        if (actionTh) actionTh.style.display = canResolveCases ? '' : 'none';
         if (tableBody) {
             if (!alerts.length) {
-                tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 20px;">No security alerts found.</td></tr>';
+                tableBody.innerHTML = `<tr><td colspan="${canResolveCases ? 9 : 8}" style="text-align:center; padding: 20px;">No security alerts found.</td></tr>`;
                 if (feedCount) feedCount.textContent = '0 tracked';
             } else {
                 tableBody.innerHTML = alerts.map(alert => `
-                    <tr class="sev-${alert.severity}">
-                        <td><span class="expander">›</span> ${alert.timestamp}</td>
-                        <td class="blue-link">${alert.agent || '004'}</td>
-                        <td>${alert.agent_name || 'Windows'}</td>
-                        <td class="blue-link">${alert.technique || 'T1059'}</td>
-                        <td>${alert.tactic || 'Execution'}</td>
-                        <td>${alert.message}</td>
-                        <td class="level">${alert.level || 10}</td>
-                        <td class="blue-link">${alert.rule_id || '255000'}</td>
+                    <tr class="sev-${escHtml(alert.severity)}">
+                        <td><span class="expander">›</span> ${escHtml(alert.timestamp)}</td>
+                        <td class="blue-link">${escHtml(alert.agent || '004')}</td>
+                        <td>${escHtml(alert.agent_name || 'Windows')}</td>
+                        <td class="blue-link">${escHtml(alert.technique || 'T1059')}</td>
+                        <td>${escHtml(alert.tactic || 'Execution')}</td>
+                        <td>${escHtml(alert.message)}</td>
+                        <td class="level">${escHtml(alert.level || 10)}</td>
+                        <td class="blue-link">${escHtml(alert.rule_id || '255000')}</td>
+                        ${canResolveCases ? `<td>${
+                            alert.alert_id
+                                ? `<button type="button" class="resolve-case-btn" data-resolve-alert-id="${escHtml(alert.alert_id)}">Solve</button>`
+                                : '<span style="opacity:.6;">—</span>'
+                        }</td>` : ''}
                     </tr>
                 `).join('');
                 if (feedCount) feedCount.textContent = `${alerts.length} tracked/SIEM`;
@@ -1416,10 +1527,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 dashRecent.innerHTML = '<div class="al-item"><span class="al-empty">No alerts in the last 7 days</span></div>';
             } else {
                 dashRecent.innerHTML = sidebar.map((alert) => {
-                    const bg = alert.severity === 'CRITICAL' || alert.severity === 'HIGH' ? 'red-bg' : 'yellow-bg';
+                    const isResolved = !!alert.is_resolved;
+                    const bg = isResolved
+                        ? 'green-bg'
+                        : (alert.severity === 'CRITICAL' || alert.severity === 'HIGH' ? 'red-bg' : 'yellow-bg');
                     const ts = typeof alert.timestamp === 'string' && alert.timestamp.length > 11
                         ? alert.timestamp.slice(11, 16)
                         : (alert.timestamp || '');
+                    const statusText = isResolved
+                        ? 'SOLVED ✓'
+                        : `${alert.severity} ›`;
+                    const statusClass = isResolved
+                        ? 'green-text'
+                        : (alert.severity === 'CRITICAL' || alert.severity === 'HIGH' ? 'red-text' : 'yellow-text');
+                    const targetPage = isResolved ? 'resolved-cases' : 'alerts';
                     return `
                         <div class="al-item">
                             <div class="al-icon ${bg}">⚠</div>
@@ -1427,13 +1548,22 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <h4>${alert.event_type || 'Alert'}</h4>
                                 <span>FalconStrix • ${ts}</span>
                             </div>
-                            <div class="al-meta"><span class="${alert.severity === 'CRITICAL' || alert.severity === 'HIGH' ? 'red-text' : 'yellow-text'}">${alert.severity} ›</span><br><a href="javascript:void(0)" onclick="window.switchPage('alerts')">View Details</a></div>
+                            <div class="al-meta"><span class="${statusClass}">${statusText}</span><br><a href="javascript:void(0)" onclick="window.switchPage('${targetPage}')">View Details</a></div>
                         </div>
                     `;
                 }).join('');
             }
         }
     };
+
+    if (alertList) {
+        alertList.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-resolve-alert-id]');
+            if (!btn) return;
+            const aid = btn.getAttribute('data-resolve-alert-id');
+            resolveLiveAlertCase(aid, btn);
+        });
+    }
 
     const renderEvents = (events = []) => {
         if (!eventList) return;
@@ -1567,6 +1697,19 @@ document.addEventListener("DOMContentLoaded", () => {
         URL.revokeObjectURL(url);
     };
 
+    const logUserAction = async (eventType, description) => {
+        try {
+            await fetch('/api/audit/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ event_type: eventType, description }),
+            });
+        } catch (_) {
+            // Keep UX non-blocking if audit endpoint is unreachable.
+        }
+    };
+
     function applyResolvedCaseFilters() {
         const caseId = (resolvedFilterCaseId?.value || '').trim();
         const q = (resolvedFilterText?.value || '').trim().toLowerCase();
@@ -1657,6 +1800,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ],
                 resolvedCasesFiltered
             );
+            logUserAction('CSV_EXPORT', `Exported resolved cases CSV (${resolvedCasesFiltered.length || 0} rows)`);
         });
     }
 
@@ -1709,6 +1853,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ],
                 terminatedProcessesFiltered
             );
+            logUserAction('CSV_EXPORT', `Exported terminated processes CSV (${terminatedProcessesFiltered.length || 0} rows)`);
         });
     }
 
@@ -2103,27 +2248,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // Update User Activity
-        const userList = document.querySelector('.user-list');
-        if (userList && data.user_activity) {
-            if (data.user_activity.length > 0) {
-                const escUa = (s) =>
-                    String(s ?? '')
-                        .replace(/&/g, '&amp;')
-                        .replace(/</g, '&lt;')
-                        .replace(/"/g, '&quot;');
-                userList.innerHTML = data.user_activity.map((u) => {
-                    const ic = u.icon || 'gray';
-                    const sym = u.icon_char || '👤';
-                    const actor = u.actor
-                        ? `<span class="ul-actor">${escUa(u.actor)}</span><span class="ul-sep">·</span>`
-                        : '';
-                    const text = escUa(u.description || u.event_type);
-                    return `<div class="ul-item"><span class="ul-icon ${ic}">${sym}</span><span class="ul-line">${actor}<span>${text}</span></span><span class="ul-time">${escUa(u.timestamp || '')} ›</span></div>`;
-                }).join('');
-            } else {
-                userList.innerHTML = '<div class="ul-item"><span>No recent auth activity</span></div>';
-            }
-        }
+        renderUserActivity(data.user_activity || []);
 
         // Incident trends (Weekly / Monthly / Yearly chart)
         if (data.incident_trends) {
@@ -2217,6 +2342,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     socket.on('new_alert', (alert) => {
         if (!alertList) return;
+        const solveCell = canResolveCases
+            ? (alert.alert_id
+                ? `<td><button type="button" class="resolve-case-btn" data-resolve-alert-id="${escHtml(alert.alert_id)}">Solve</button></td>`
+                : '<td><span style="opacity:.6;">—</span></td>')
+            : '';
         const tr = document.createElement('tr');
         tr.className = 'sev-' + alert.severity;
         tr.innerHTML = `
@@ -2228,6 +2358,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td>${alert.message}</td>
             <td class="level">${alert.level || 10}</td>
             <td class="blue-link">${alert.rule_id || '255563'}</td>
+            ${solveCell}
         `;
         alertList.prepend(tr);
         if (alertList.children.length > 50) alertList.removeChild(alertList.lastChild);
@@ -2332,6 +2463,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.body.appendChild(link);
             link.click();
             link.remove();
+            logUserAction('REPORT_GENERATED', `Generated SOC report CSV (${dateStr})`);
         });
     }
 
