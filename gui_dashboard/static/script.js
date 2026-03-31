@@ -24,6 +24,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const connectionBadge = document.getElementById('connection-badge');
     const statusBadge = document.getElementById('status-badge');
     const overlay = document.getElementById('defensive-overlay');
+    const defOverlaySummary = document.getElementById('def-overlay-summary');
+    const defOverlayList = document.getElementById('def-overlay-list');
+    const defOverlayOpenAlertsBtn = document.getElementById('def-overlay-open-alerts');
+    const defOverlayOpenResolvedBtn = document.getElementById('def-overlay-open-resolved');
     const alertList = document.getElementById('alert-list-table');
     const eventList = document.getElementById('event-list');
     const stateHistoryList = document.getElementById('state-history-list');
@@ -217,6 +221,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const resolvedChip24h = document.getElementById('resolved-chip-24h');
     const resolvedChip7d = document.getElementById('resolved-chip-7d');
     const resolvedExportCsv = document.getElementById('resolved-export-csv');
+    const resolvedExportPdf = document.getElementById('resolved-export-pdf');
     const terminatedFilterUser = document.getElementById('terminated-filter-user');
     const terminatedFilterPid = document.getElementById('terminated-filter-pid');
     const terminatedFilterText = document.getElementById('terminated-filter-text');
@@ -227,11 +232,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const terminatedChip24h = document.getElementById('terminated-chip-24h');
     const terminatedChip7d = document.getElementById('terminated-chip-7d');
     const terminatedExportCsv = document.getElementById('terminated-export-csv');
+    const terminatedExportPdf = document.getElementById('terminated-export-pdf');
+    const userActivityExportCsv = document.getElementById('user-activity-export-csv');
+    const incidentSummaryExportCsv = document.getElementById('incident-summary-export-csv');
 
     let resolvedCasesAll = [];
     let terminatedProcessesAll = [];
     let resolvedCasesFiltered = [];
     let terminatedProcessesFiltered = [];
+    let userActivityCurrent = [];
+    let incidentSummaryCurrent = [];
+    let overlayAcknowledgedLocked = false;
+    let lockAutoReevalInFlight = false;
+    let lockAutoReevalUnsupported = false;
 
     const RT_SCENARIOS = [
         {
@@ -1198,7 +1211,20 @@ document.addEventListener("DOMContentLoaded", () => {
             switchPage(page);
         });
     });
-
+    if (defOverlayOpenAlertsBtn) {
+        defOverlayOpenAlertsBtn.addEventListener('click', () => {
+            overlayAcknowledgedLocked = true;
+            if (overlay) overlay.classList.add('hidden');
+            switchPage('alerts');
+        });
+    }
+    if (defOverlayOpenResolvedBtn) {
+        defOverlayOpenResolvedBtn.addEventListener('click', () => {
+            overlayAcknowledgedLocked = true;
+            if (overlay) overlay.classList.add('hidden');
+            switchPage('resolved-cases');
+        });
+    }
     // Concept cards can jump directly to their matching concept pages.
     document.querySelectorAll('.concept-card').forEach(card => {
         card.addEventListener('click', () => switchPage(card.dataset.page || 'os-concepts'));
@@ -1349,6 +1375,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         document.body.classList.remove('theme-normal', 'theme-warning', 'theme-locked');
         if (overlay) overlay.classList.add('hidden');
+        if (st !== 'LOCKED') overlayAcknowledgedLocked = false;
 
         if (st === 'NORMAL') {
             if (statusBadge) statusBadge.classList.add('badge-normal');
@@ -1359,11 +1386,65 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (st === 'LOCKED') {
             if (statusBadge) statusBadge.classList.add('badge-locked');
             document.body.classList.add('theme-locked');
-            if (overlay) overlay.classList.remove('hidden');
+            if (overlay && !overlayAcknowledgedLocked) overlay.classList.remove('hidden');
         }
 
         updateFsmDiagram(st);
         updateOsConceptsStripState(st);
+    };
+
+    const updateDefensiveOverlay = (data = {}) => {
+        const st = (data.state || 'NORMAL').toUpperCase();
+        if (st !== 'LOCKED') return;
+        const lockCtx = data.fsm_lock_context || {};
+        const counts = data.severity_counts || {};
+        const activeCount = Number.isFinite(Number(lockCtx.unresolved_total))
+            ? Number(lockCtx.unresolved_total)
+            : (Array.isArray(data.active_alerts) ? data.active_alerts.length : 0);
+        const critical = Number.isFinite(Number(lockCtx.critical)) ? Number(lockCtx.critical) : (counts.CRITICAL || 0);
+        const high = Number.isFinite(Number(lockCtx.high)) ? Number(lockCtx.high) : (counts.HIGH || 0);
+        const medium = Number.isFinite(Number(lockCtx.medium)) ? Number(lockCtx.medium) : (counts.MEDIUM || 0);
+        const reason = String(lockCtx.reason || '').trim();
+        if (defOverlaySummary) {
+            if (activeCount > 0) {
+                defOverlaySummary.textContent = `LOCKED because unresolved alerts remain (${activeCount}). Open Live Alerts and solve to return to NORMAL.`;
+            } else if (lockAutoReevalUnsupported) {
+                defOverlaySummary.textContent = 'LOCKED with zero unresolved shown. Backend route update is not loaded yet — restart gui_dashboard/app.py.';
+            } else {
+                defOverlaySummary.textContent = 'No active alerts detected. Auto re-checking FSM now to return to NORMAL.';
+            }
+        }
+        if (defOverlayList) {
+            defOverlayList.innerHTML = `
+                <li><strong>State:</strong> ${st}</li>
+                <li><strong>Open Alerts:</strong> ${activeCount}</li>
+                <li><strong>Critical / High / Medium:</strong> ${critical} / ${high} / ${medium}</li>
+                <li><strong>Lock reason (backend/DB):</strong> ${escHtml(reason || 'Awaiting lock reason from FSM history')}</li>
+            `;
+        }
+        if (activeCount === 0 && !lockAutoReevalInFlight && !lockAutoReevalUnsupported) {
+            lockAutoReevalInFlight = true;
+            fetch('/api/fsm/reevaluate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+            })
+                .then((r) => {
+                    if (r.status === 404) {
+                        lockAutoReevalUnsupported = true;
+                    }
+                    return r.json().catch(() => ({}));
+                })
+                .then((payload) => {
+                    if (payload && payload.snapshot) {
+                        applyGlobalStateUi(payload.snapshot.state);
+                    }
+                })
+                .catch(() => {})
+                .finally(() => {
+                    setTimeout(() => { lockAutoReevalInFlight = false; }, 2000);
+                });
+        }
     };
 
     const updateFsmDiagram = (state) => {
@@ -1394,10 +1475,62 @@ document.addEventListener("DOMContentLoaded", () => {
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/"/g, '&quot;');
+    const escAttr = (s) => String(s ?? '').replace(/"/g, '&quot;');
+
+    const flashDetailRow = (rowEl, severity) => {
+        if (!rowEl) return;
+        const sev = String(severity || '').toUpperCase();
+        rowEl.classList.remove('row-jump-highlight', 'jump-sev-critical', 'jump-sev-high', 'jump-sev-medium', 'jump-sev-low');
+        if (sev === 'CRITICAL') rowEl.classList.add('jump-sev-critical');
+        else if (sev === 'HIGH') rowEl.classList.add('jump-sev-high');
+        else if (sev === 'MEDIUM') rowEl.classList.add('jump-sev-medium');
+        else rowEl.classList.add('jump-sev-low');
+        rowEl.classList.add('row-jump-highlight');
+        rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+            rowEl.classList.remove('row-jump-highlight', 'jump-sev-critical', 'jump-sev-high', 'jump-sev-medium', 'jump-sev-low');
+        }, 2200);
+    };
+
+    const jumpToAlertDetail = (alertId, pageName, severity) => {
+        const idNum = Number(alertId);
+        if (!Number.isFinite(idNum) || idNum <= 0) {
+            switchPage(pageName || 'alerts');
+            return;
+        }
+        const targetPage = pageName === 'resolved-cases' ? 'resolved-cases' : 'alerts';
+        switchPage(targetPage);
+        const tryHighlight = () => {
+            const selector = targetPage === 'resolved-cases'
+                ? `#resolved-cases-table tr[data-alert-id="${idNum}"]`
+                : `#alert-list-table tr[data-alert-id="${idNum}"]`;
+            const row = document.querySelector(selector);
+            if (row) {
+                flashDetailRow(row, severity || row.getAttribute('data-severity'));
+                return true;
+            }
+            return false;
+        };
+        if (tryHighlight()) return;
+        fetch('/api/dashboard_snapshot')
+            .then((r) => r.json())
+            .then((snap) => {
+                if (targetPage === 'resolved-cases') {
+                    renderResolvedCases((snap && snap.resolved_cases_rows) || []);
+                } else {
+                    renderAlerts((snap && snap.active_alerts) || [], (snap && snap.recent_alerts) || []);
+                }
+                setTimeout(() => {
+                    tryHighlight();
+                }, 80);
+            })
+            .catch(() => {});
+    };
 
     const renderUserActivity = (items = []) => {
         const userList = document.querySelector('.user-list');
         if (!userList) return;
+        userActivityCurrent = Array.isArray(items) ? items.slice() : [];
         const escUa = (s) =>
             String(s ?? '')
                 .replace(/&/g, '&amp;')
@@ -1500,7 +1633,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (feedCount) feedCount.textContent = '0 tracked';
             } else {
                 tableBody.innerHTML = alerts.map(alert => `
-                    <tr class="sev-${escHtml(alert.severity)}">
+                    <tr class="sev-${escHtml(alert.severity)}" data-alert-id="${escAttr(alert.alert_id)}" data-severity="${escAttr(alert.severity)}">
                         <td><span class="expander">›</span> ${escHtml(alert.timestamp)}</td>
                         <td class="blue-link">${escHtml(alert.agent || '004')}</td>
                         <td>${escHtml(alert.agent_name || 'Windows')}</td>
@@ -1548,7 +1681,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <h4>${alert.event_type || 'Alert'}</h4>
                                 <span>FalconStrix • ${ts}</span>
                             </div>
-                            <div class="al-meta"><span class="${statusClass}">${statusText}</span><br><a href="javascript:void(0)" onclick="window.switchPage('${targetPage}')">View Details</a></div>
+                            <div class="al-meta"><span class="${statusClass}">${statusText}</span><br><a href="javascript:void(0)" class="alert-detail-link" data-target-page="${targetPage}" data-alert-id="${escAttr(alert.alert_id)}" data-severity="${escAttr(alert.severity)}">View Details</a></div>
                         </div>
                     `;
                 }).join('');
@@ -1562,6 +1695,19 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!btn) return;
             const aid = btn.getAttribute('data-resolve-alert-id');
             resolveLiveAlertCase(aid, btn);
+        });
+    }
+    const dashRecent = document.getElementById('dash-recent-alerts');
+    if (dashRecent) {
+        dashRecent.addEventListener('click', (e) => {
+            const link = e.target.closest('.alert-detail-link');
+            if (!link) return;
+            e.preventDefault();
+            jumpToAlertDetail(
+                link.getAttribute('data-alert-id'),
+                link.getAttribute('data-target-page'),
+                link.getAttribute('data-severity')
+            );
         });
     }
 
@@ -1603,7 +1749,7 @@ document.addEventListener("DOMContentLoaded", () => {
         resolvedCasesTable.innerHTML = rows
             .map(
                 (r) => `
-            <tr class="sev-${esc(r.severity)}">
+            <tr class="sev-${esc(r.severity)}" data-alert-id="${esc(r.alert_id)}" data-severity="${esc(r.severity)}">
                 <td>${esc(r.alert_id)}</td>
                 <td>${esc(r.severity)}</td>
                 <td>${esc(r.trigger_event)}</td>
@@ -1710,6 +1856,39 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const downloadPdfReport = async (url, fallbackName, auditMessage) => {
+        try {
+            const res = await fetch(url, { credentials: 'same-origin' });
+            if (!res.ok) {
+                let details = '';
+                try {
+                    const t = await res.text();
+                    if (t && t.trim().startsWith('{')) {
+                        const j = JSON.parse(t);
+                        details = j.error || j.message || '';
+                    } else if (t && t.toLowerCase().includes('<title>sign in')) {
+                        details = 'Session expired, please login again.';
+                    }
+                } catch (_) {}
+                throw new Error(`Report request failed (${res.status})${details ? `: ${details}` : ''}`);
+            }
+            const blob = await res.blob();
+            const dl = document.createElement('a');
+            const objectUrl = URL.createObjectURL(blob);
+            dl.href = objectUrl;
+            const dispo = res.headers.get('content-disposition') || '';
+            const m = dispo.match(/filename="?([^"]+)"?/i);
+            dl.download = (m && m[1]) || fallbackName;
+            document.body.appendChild(dl);
+            dl.click();
+            dl.remove();
+            URL.revokeObjectURL(objectUrl);
+            if (auditMessage) logUserAction('REPORT_GENERATED', auditMessage);
+        } catch (err) {
+            alert(`PDF report failed: ${err.message || err}`);
+        }
+    };
+
     function applyResolvedCaseFilters() {
         const caseId = (resolvedFilterCaseId?.value || '').trim();
         const q = (resolvedFilterText?.value || '').trim().toLowerCase();
@@ -1803,6 +1982,11 @@ document.addEventListener("DOMContentLoaded", () => {
             logUserAction('CSV_EXPORT', `Exported resolved cases CSV (${resolvedCasesFiltered.length || 0} rows)`);
         });
     }
+    if (resolvedExportPdf) {
+        resolvedExportPdf.addEventListener('click', () => {
+            downloadPdfReport('/api/reports/resolved-cases.pdf', 'FalconStrix_Resolved_Cases.pdf', 'Downloaded resolved cases PDF report');
+        });
+    }
 
     [terminatedFilterUser, terminatedFilterPid, terminatedFilterText, terminatedFilterFrom, terminatedFilterTo].forEach((el) => {
         if (!el) return;
@@ -1854,6 +2038,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 terminatedProcessesFiltered
             );
             logUserAction('CSV_EXPORT', `Exported terminated processes CSV (${terminatedProcessesFiltered.length || 0} rows)`);
+        });
+    }
+    if (terminatedExportPdf) {
+        terminatedExportPdf.addEventListener('click', () => {
+            downloadPdfReport('/api/reports/terminated-processes.pdf', 'FalconStrix_Terminated_Processes.pdf', 'Downloaded terminated processes PDF report');
+        });
+    }
+    if (userActivityExportCsv) {
+        userActivityExportCsv.addEventListener('click', () => {
+            downloadPdfReport('/api/reports/user-activity.pdf', 'FalconStrix_User_Activity.pdf', 'Downloaded user activity PDF report');
+        });
+    }
+    if (incidentSummaryExportCsv) {
+        incidentSummaryExportCsv.addEventListener('click', () => {
+            downloadPdfReport('/api/reports/incident-summary.pdf', 'FalconStrix_Incident_Summary.pdf', 'Downloaded incident summary PDF report');
         });
     }
 
@@ -2216,6 +2415,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     socket.on('dashboard_snapshot', (data) => {
+        updateDefensiveOverlay(data);
         const counts = data.severity_counts || {};
         const activeAlerts = data.active_alerts || [];
 
@@ -2259,6 +2459,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Update Incident Summary
         const summaryList = document.querySelector('.summary-list');
         if (summaryList && data.incident_summary) {
+            incidentSummaryCurrent = Array.isArray(data.incident_summary) ? data.incident_summary.slice() : [];
             if (data.incident_summary.length > 0) {
                 summaryList.innerHTML = data.incident_summary.map((s) => {
                     const color = s.color || (s.severity === 'CRITICAL' || s.severity === 'HIGH' ? 'red' : 'blue');
@@ -2349,6 +2550,8 @@ document.addEventListener("DOMContentLoaded", () => {
             : '';
         const tr = document.createElement('tr');
         tr.className = 'sev-' + alert.severity;
+        if (alert.alert_id) tr.setAttribute('data-alert-id', String(alert.alert_id));
+        if (alert.severity) tr.setAttribute('data-severity', String(alert.severity));
         tr.innerHTML = `
             <td><span class="expander">›</span> ${alert.timestamp}</td>
             <td class="blue-link">${alert.agent || '004'}</td>
@@ -2373,7 +2576,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         <h4>${alert.event_type || 'System Event'}</h4>
                         <span>FalconStrix • New</span>
                     </div>
-                    <div class="al-meta"><span class="${alert.severity === 'CRITICAL' || alert.severity === 'HIGH' ? 'red-text' : 'yellow-text'}">${alert.severity} ›</span><br><a href="javascript:void(0)" onclick="window.switchPage('alerts')">View Details</a></div>
+                    <div class="al-meta"><span class="${alert.severity === 'CRITICAL' || alert.severity === 'HIGH' ? 'red-text' : 'yellow-text'}">${alert.severity} ›</span><br><a href="javascript:void(0)" class="alert-detail-link" data-target-page="alerts" data-alert-id="${escHtml(alert.alert_id)}" data-severity="${escHtml(alert.severity)}">View Details</a></div>
                 </div>
             `;
             dashRecent.insertAdjacentHTML('afterbegin', html);
@@ -2447,23 +2650,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnReport = document.getElementById('btn-generate-report');
     if (btnReport) {
         btnReport.addEventListener('click', () => {
-            const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-            const csvContent = "data:text/csv;charset=utf-8," 
-                + "FalconStrix SOC Report\nGenerated: " + dateStr + "\n\n"
-                + "Metric,Value\n"
-                + "System Status," + statusBadge.textContent.replace('STATE: ', '') + "\n"
-                + "Active Threats," + (document.getElementById('dash-active-threats')?.textContent || 0) + "\n"
-                + "Resolved Cases," + (document.getElementById('dash-resolved')?.textContent || 0) + "\n"
-                + "Vulnerabilities," + (document.getElementById('dash-vuln')?.textContent || 0) + "\n";
-            
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement('a');
-            link.setAttribute('href', encodedUri);
-            link.setAttribute('download', 'FalconStrix_Report_' + dateStr + '.csv');
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            logUserAction('REPORT_GENERATED', `Generated SOC report CSV (${dateStr})`);
+            downloadPdfReport('/api/reports/dashboard.pdf', 'FalconStrix_Soc_Report.pdf', 'Generated full professional SOC PDF report');
         });
     }
 

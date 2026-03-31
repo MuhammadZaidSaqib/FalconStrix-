@@ -199,6 +199,7 @@
                             <div class="dash-widget widget-users">
                                 <div class="widget-header">
                                     <h3>User Activity</h3>
+                                    <button id="user-activity-export-csv" type="button" class="mini-export-btn">Download PDF</button>
                                 </div>
                                 <div class="user-list">
                                     <div class="ul-item"><span class="ul-icon gray">👤</span> <span>Admin Login</span> <span class="ul-time">10:24 AM ›</span></div>
@@ -257,6 +258,7 @@
                         <div class="dash-widget widget-summary">
                             <div class="widget-header">
                                 <h3>Incident Summary</h3>
+                                <button id="incident-summary-export-csv" type="button" class="mini-export-btn">Download PDF</button>
                             </div>
                             <div class="summary-list"></div>
                         </div>
@@ -348,6 +350,7 @@
                             <button id="resolved-chip-7d" type="button" class="quick-chip-btn">7d</button>
                         </div>
                         <button id="resolved-export-csv" type="button" class="filter-export-btn">Export CSV (Filtered)</button>
+                        <button id="resolved-export-pdf" type="button" class="filter-export-btn">Export PDF</button>
                         <button id="resolved-filter-clear" type="button" class="filter-clear-btn">Clear</button>
                     </div>
                     <div class="table-responsive">
@@ -387,6 +390,7 @@
                             <button id="terminated-chip-7d" type="button" class="quick-chip-btn">7d</button>
                         </div>
                         <button id="terminated-export-csv" type="button" class="filter-export-btn">Export CSV (Filtered)</button>
+                        <button id="terminated-export-pdf" type="button" class="filter-export-btn">Export PDF</button>
                         <button id="terminated-filter-clear" type="button" class="filter-clear-btn">Clear</button>
                     </div>
                     <div class="table-responsive">
@@ -1444,7 +1448,17 @@ void trigger_response(int pid) {
         <div class="alert-box">
             <h1>THREAT LEVEL: CRITICAL</h1>
             <h2>DEFENSIVE MODE ACTIVATED</h2>
-            <p>Active Response Engine is neutralizing threats...</p>
+            <p id="def-overlay-summary">Active Response Engine is neutralizing threats...</p>
+            <ul class="def-overlay-list" id="def-overlay-list">
+                <li>State: LOCKED</li>
+                <li>Open Alerts: 0</li>
+                <li>Critical/High: 0 / 0</li>
+                <li>Next step: open Live Alerts and solve cases</li>
+            </ul>
+            <div class="def-overlay-actions">
+                <button type="button" class="def-overlay-btn def-overlay-btn--primary" id="def-overlay-open-alerts">Open Live Alerts</button>
+                <button type="button" class="def-overlay-btn" id="def-overlay-open-resolved">Open Resolved Cases</button>
+            </div>
         </div>
     </div>
 
@@ -1452,7 +1466,7 @@ void trigger_response(int pid) {
         window.FALCON_USER_ROLE = "{{ (user_role or 'user')|e }}";
         window.FALCON_USERNAME = "{{ (username or '')|e }}";
     </script>
-    <script src="{{ url_for('static', filename='script.js', v='20260331a') }}"></script>
+    <script src="{{ url_for('static', filename='script.js', v='20260331b') }}"></script>
 </body>
 </html>
 

@@ -4,6 +4,7 @@ import time
 import random
 import json
 import re
+import io
 from collections import deque
 from datetime import datetime, timedelta
 from flask import (
@@ -13,6 +14,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -22,6 +24,16 @@ try:
     import psutil
 except ImportError:
     psutil = None
+
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    REPORTLAB_OK = True
+except Exception:
+    REPORTLAB_OK = False
 
 try:
     from dotenv import load_dotenv
@@ -680,6 +692,7 @@ def get_resolved_cases_rows(limit=200):
                 'trigger_event': 'SUSPICIOUS_PROC',
                 'detected_at': time.strftime('%Y-%m-%d %H:%M:%S'),
                 'resolved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'resolved_by': 'admin',
                 'resolution_detail': 'SIGKILL delivered (LOCKED response)',
                 'process_name': 'netcat',
                 'pid': 8842,
@@ -720,7 +733,20 @@ def get_resolved_cases_rows(limit=200):
                       )
                     ORDER BY re.timestamp DESC
                     LIMIT 1
-                ) AS resolution_detail
+                ) AS resolution_detail,
+                (
+                    SELECT COALESCE(NULLIF(TRIM(u.username), ''), 'system')
+                    FROM Events re
+                    LEFT JOIN Users u ON u.user_id = re.user_id
+                    WHERE re.event_type = 'CASE_RESOLVED'
+                      AND (
+                        re.description LIKE CONCAT('%%case #', a.alert_id, '%%')
+                        OR re.description LIKE CONCAT('%%case ', a.alert_id, '%%')
+                        OR re.description LIKE CONCAT('%%Alert case ', a.alert_id, '%%')
+                      )
+                    ORDER BY re.timestamp DESC
+                    LIMIT 1
+                ) AS resolved_by
             FROM Alerts a
             JOIN Severity s ON s.severity_id = a.severity_id
             JOIN Events e ON e.event_id = a.event_id
@@ -737,6 +763,8 @@ def get_resolved_cases_rows(limit=200):
         for k in ('detected_at', 'resolved_at', 'process_created_at'):
             if hasattr(r.get(k), 'strftime'):
                 r[k] = r[k].strftime('%Y-%m-%d %H:%M:%S')
+        if not r.get('resolved_by'):
+            r['resolved_by'] = 'system'
     return rows
 
 
@@ -783,6 +811,52 @@ def get_terminated_process_rows(limit=250):
             if hasattr(r.get(k), 'strftime'):
                 r[k] = r[k].strftime('%Y-%m-%d %H:%M:%S')
     return rows
+
+
+def get_fsm_lock_context():
+    """
+    DB-backed lock diagnostics used by overlay/explanations.
+    This shows why LOCKED is active even when visible alert table looks empty.
+    """
+    base = {
+        'unresolved_total': 0,
+        'critical': 0,
+        'high': 0,
+        'medium': 0,
+        'reason': 'No lock reason available',
+    }
+    if not DB_AVAILABLE:
+        return base
+    try:
+        totals = fetch_query(
+            """
+            SELECT
+                COUNT(*) AS unresolved_total,
+                COALESCE(SUM(CASE WHEN s.level_name='CRITICAL' THEN 1 ELSE 0 END),0) AS critical,
+                COALESCE(SUM(CASE WHEN s.level_name='HIGH' THEN 1 ELSE 0 END),0) AS high,
+                COALESCE(SUM(CASE WHEN s.level_name='MEDIUM' THEN 1 ELSE 0 END),0) AS medium
+            FROM Alerts a
+            JOIN Severity s ON s.severity_id = a.severity_id
+            WHERE a.is_resolved = FALSE
+            """,
+            fetchall=False,
+        ) or {}
+        last = fetch_query(
+            "SELECT reason FROM FSM_State_History ORDER BY changed_at DESC LIMIT 1",
+            fetchall=False,
+        ) or {}
+        base.update(
+            {
+                'unresolved_total': int(totals.get('unresolved_total') or 0),
+                'critical': int(totals.get('critical') or 0),
+                'high': int(totals.get('high') or 0),
+                'medium': int(totals.get('medium') or 0),
+                'reason': (last.get('reason') or base['reason'])[:260],
+            }
+        )
+    except Exception:
+        pass
+    return base
 
 
 def network_poll_thread():
@@ -886,6 +960,7 @@ def build_dashboard_snapshot(current_state):
     incident_summary = build_incident_summary_list(active_alerts, recent_events)
     resolved_cases_rows = get_resolved_cases_rows(250)
     terminated_process_rows = get_terminated_process_rows(250)
+    fsm_lock_context = get_fsm_lock_context()
 
     recent_alerts_widget = get_db_data_safely(lambda: get_recent_alerts_for_dashboard(7, 5), []) or []
     if not DB_AVAILABLE:
@@ -911,7 +986,96 @@ def build_dashboard_snapshot(current_state):
         'incident_summary': incident_summary,
         'resolved_cases_rows': resolved_cases_rows,
         'terminated_process_rows': terminated_process_rows,
+        'fsm_lock_context': fsm_lock_context,
     }
+
+
+def _severity_pdf_color(sev):
+    s = str(sev or '').upper()
+    if s == 'CRITICAL':
+        return colors.HexColor('#7F1D1D')
+    if s == 'HIGH':
+        return colors.HexColor('#7C2D12')
+    if s == 'MEDIUM':
+        return colors.HexColor('#78350F')
+    if s == 'LOW':
+        return colors.HexColor('#14532D')
+    return None
+
+
+def _to_text(v):
+    if v is None:
+        return '-'
+    txt = str(v).strip()
+    return txt if txt else '-'
+
+
+def _render_pdf_report(report_title, subtitle, sections):
+    if not REPORTLAB_OK:
+        raise RuntimeError("PDF engine not available. Install reportlab.")
+    buff = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buff,
+        pagesize=A4,
+        topMargin=14 * mm,
+        bottomMargin=12 * mm,
+        leftMargin=10 * mm,
+        rightMargin=10 * mm,
+        title=report_title,
+        author='FalconStrix',
+    )
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph(f"<b>{report_title}</b>", styles['Title']),
+        Paragraph(subtitle, styles['Normal']),
+        Spacer(1, 8),
+    ]
+    for section in sections:
+        section_title = section.get('title') or 'Section'
+        cols = section.get('columns') or []
+        rows = section.get('rows') or []
+        sev_key = section.get('severity_key')
+        story.append(Paragraph(f"<b>{section_title}</b>", styles['Heading3']))
+        if not rows:
+            story.append(Paragraph("No records available.", styles['Italic']))
+            story.append(Spacer(1, 8))
+            continue
+        table_data = [cols]
+        for row in rows:
+            table_data.append([_to_text(row.get(k)) for k in section.get('keys', [])])
+        table = Table(table_data, repeatRows=1)
+        style_cmds = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#111827')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#374151')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]
+        if sev_key:
+            for i, row in enumerate(rows, start=1):
+                c = _severity_pdf_color(row.get(sev_key))
+                if c:
+                    style_cmds.append(('BACKGROUND', (0, i), (-1, i), c))
+                    style_cmds.append(('TEXTCOLOR', (0, i), (-1, i), colors.whitesmoke))
+        table.setStyle(TableStyle(style_cmds))
+        story.append(table)
+        story.append(Spacer(1, 10))
+    doc.build(story)
+    buff.seek(0)
+    return buff
+
+
+def _send_pdf(report_title, sections, filename):
+    subtitle = f"Generated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Source: FalconStrix Dashboard"
+    pdf_stream = _render_pdf_report(report_title, subtitle, sections)
+    return send_file(
+        pdf_stream,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/pdf',
+    )
 
 
 def make_snapshot_signature(snapshot):
@@ -1266,6 +1430,148 @@ def api_dashboard_snapshot():
         st = get_effective_fsm_state()
         snap = build_dashboard_snapshot(st)
         return jsonify(snap)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/fsm/reevaluate', methods=['POST'])
+def api_fsm_reevaluate():
+    """
+    Force an FSM recalculation and unlock check.
+    Used by LOCKED overlay when counts are shown as zero.
+    """
+    try:
+        from fsm_service import tick_fsm, maybe_unlock_locked_state
+        actor = session.get('username') or 'system'
+        tick_fsm()
+        maybe_unlock_locked_state(actor_username=actor)
+        st = get_effective_fsm_state()
+        snap = build_dashboard_snapshot(st)
+        return jsonify({'ok': True, 'state': st, 'snapshot': snap})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/reports/dashboard.pdf')
+def api_report_dashboard_pdf():
+    try:
+        st = get_effective_fsm_state()
+        snap = build_dashboard_snapshot(st)
+        metrics_rows = [
+            {'metric': 'FSM State', 'value': snap.get('state')},
+            {'metric': 'Active Threats', 'value': len(snap.get('active_alerts') or [])},
+            {'metric': 'Resolved Cases', 'value': snap.get('resolved_cases')},
+            {'metric': 'Kill Actions (24h)', 'value': snap.get('kill_cnt')},
+            {'metric': 'IPC Events (1h)', 'value': snap.get('ipc_total')},
+        ]
+        sections = [
+            {
+                'title': 'Executive Metrics',
+                'columns': ['Metric', 'Value'],
+                'keys': ['metric', 'value'],
+                'rows': metrics_rows,
+            },
+            {
+                'title': 'Active Alerts',
+                'columns': ['Case ID', 'Severity', 'Event', 'Message', 'Detected At'],
+                'keys': ['alert_id', 'severity', 'event_type', 'message', 'timestamp'],
+                'rows': (snap.get('active_alerts') or [])[:35],
+                'severity_key': 'severity',
+            },
+            {
+                'title': 'Resolved Cases',
+                'columns': ['Case ID', 'Severity', 'Resolved By', 'Resolved At', 'Process', 'PID', 'Resolution'],
+                'keys': ['alert_id', 'severity', 'resolved_by', 'resolved_at', 'process_name', 'pid', 'resolution_detail'],
+                'rows': (snap.get('resolved_cases_rows') or [])[:40],
+                'severity_key': 'severity',
+            },
+            {
+                'title': 'User Activity',
+                'columns': ['Actor', 'Event', 'Description', 'Time'],
+                'keys': ['actor', 'event_type', 'description', 'timestamp'],
+                'rows': (snap.get('user_activity') or [])[:40],
+            },
+            {
+                'title': 'Incident Summary',
+                'columns': ['Severity', 'Incident', 'Time'],
+                'keys': ['severity', 'title', 'time'],
+                'rows': (snap.get('incident_summary') or [])[:30],
+                'severity_key': 'severity',
+            },
+        ]
+        return _send_pdf('FalconStrix Professional SOC Report', sections, 'FalconStrix_Soc_Report.pdf')
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/reports/user-activity.pdf')
+def api_report_user_activity_pdf():
+    try:
+        st = get_effective_fsm_state()
+        snap = build_dashboard_snapshot(st)
+        sections = [
+            {
+                'title': 'User Activity Audit',
+                'columns': ['Actor', 'Event Type', 'Description', 'Timestamp'],
+                'keys': ['actor', 'event_type', 'description', 'timestamp'],
+                'rows': (snap.get('user_activity') or [])[:100],
+            }
+        ]
+        return _send_pdf('FalconStrix User Activity Report', sections, 'FalconStrix_User_Activity.pdf')
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/reports/incident-summary.pdf')
+def api_report_incident_summary_pdf():
+    try:
+        st = get_effective_fsm_state()
+        snap = build_dashboard_snapshot(st)
+        sections = [
+            {
+                'title': 'Incident Summary',
+                'columns': ['Severity', 'Incident', 'Time'],
+                'keys': ['severity', 'title', 'time'],
+                'rows': (snap.get('incident_summary') or [])[:100],
+                'severity_key': 'severity',
+            }
+        ]
+        return _send_pdf('FalconStrix Incident Summary Report', sections, 'FalconStrix_Incident_Summary.pdf')
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/reports/resolved-cases.pdf')
+def api_report_resolved_cases_pdf():
+    try:
+        rows = get_resolved_cases_rows(500)
+        sections = [
+            {
+                'title': 'Resolved Cases',
+                'columns': ['Case ID', 'Severity', 'Resolved By', 'Detected At', 'Resolved At', 'Process', 'PID', 'Resolution'],
+                'keys': ['alert_id', 'severity', 'resolved_by', 'detected_at', 'resolved_at', 'process_name', 'pid', 'resolution_detail'],
+                'rows': rows,
+                'severity_key': 'severity',
+            }
+        ]
+        return _send_pdf('FalconStrix Resolved Cases Report', sections, 'FalconStrix_Resolved_Cases.pdf')
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/reports/terminated-processes.pdf')
+def api_report_terminated_processes_pdf():
+    try:
+        rows = get_terminated_process_rows(500)
+        sections = [
+            {
+                'title': 'Terminated Processes',
+                'columns': ['Terminated At', 'Terminated By', 'Action', 'Process', 'PID', 'Created At', 'Source', 'Details'],
+                'keys': ['terminated_at', 'terminated_by', 'action_type', 'process_name', 'pid', 'process_created_at', 'source', 'details'],
+                'rows': rows,
+            }
+        ]
+        return _send_pdf('FalconStrix Terminated Processes Report', sections, 'FalconStrix_Terminated_Processes.pdf')
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

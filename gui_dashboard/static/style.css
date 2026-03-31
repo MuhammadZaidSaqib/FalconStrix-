@@ -1274,6 +1274,7 @@ header {
     flex-wrap: wrap;
     align-items: center;
     gap: 8px 12px;
+    margin-top: 12px;
     margin-bottom: 6px;
 }
 .res-viz-btn {
@@ -1844,6 +1845,43 @@ header {
 .alert-box h1 { margin: 0; font-size: 1.8rem; }
 .alert-box h2 { margin: 8px 0 12px; font-weight: 500; font-size: 1.1rem; opacity: 0.9; }
 .alert-box p { margin: 0; opacity: 0.8; }
+.def-overlay-list {
+    margin: 14px 0 0;
+    padding: 10px 14px;
+    list-style: none;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-align: left;
+}
+.def-overlay-list li {
+    font-size: 0.9rem;
+    line-height: 1.45;
+    margin: 4px 0;
+}
+.def-overlay-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+.def-overlay-btn {
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    background: rgba(0, 0, 0, 0.2);
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.def-overlay-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+.def-overlay-btn--primary {
+    border-color: rgba(255, 255, 255, 0.62);
+    background: rgba(255, 255, 255, 0.18);
+}
 
 /* ═══ ANIMATIONS ══════════════════════════════════════════════════════════ */
 @keyframes flash {
@@ -1954,6 +1992,18 @@ header {
     margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;
 }
 .widget-header h3 { margin: 0; font-size: 0.95rem; color: #fff; font-weight: 600; }
+.mini-export-btn {
+    background: rgba(0, 195, 255, 0.14);
+    color: #d9f6ff;
+    border: 1px solid rgba(0, 195, 255, 0.42);
+    border-radius: 7px;
+    padding: 5px 9px;
+    font-size: 0.72rem;
+    cursor: pointer;
+}
+.mini-export-btn:hover {
+    background: rgba(0, 195, 255, 0.24);
+}
 .icon-btn {
     background: transparent; border: none; color: var(--muted-text); cursor: pointer;
     font-size: 1rem; padding: 4px; border-radius: 4px;
@@ -2392,6 +2442,34 @@ header {
 .alerts-table tr.sev-HIGH td:nth-child(7) { color: #ffa657; font-weight: bold; }
 .alerts-table tr.sev-MEDIUM td:nth-child(7) { color: #d29922; font-weight: bold; }
 .alerts-table tr.sev-LOW td:nth-child(7) { color: #3fb950; font-weight: bold; }
+
+/* Row highlight after clicking "View Details" from Recent Alerts */
+.row-jump-highlight {
+    animation: rowJumpPulse 2.2s ease-out 1;
+}
+.row-jump-highlight.jump-sev-critical {
+    box-shadow: inset 0 0 0 2px rgba(255, 74, 74, 0.7);
+    background: rgba(255, 74, 74, 0.14) !important;
+}
+.row-jump-highlight.jump-sev-high {
+    box-shadow: inset 0 0 0 2px rgba(255, 166, 87, 0.7);
+    background: rgba(255, 166, 87, 0.12) !important;
+}
+.row-jump-highlight.jump-sev-medium {
+    box-shadow: inset 0 0 0 2px rgba(210, 153, 34, 0.7);
+    background: rgba(210, 153, 34, 0.11) !important;
+}
+.row-jump-highlight.jump-sev-low {
+    box-shadow: inset 0 0 0 2px rgba(63, 185, 80, 0.7);
+    background: rgba(63, 185, 80, 0.1) !important;
+}
+@keyframes rowJumpPulse {
+    0% { transform: translateX(0); }
+    20% { transform: translateX(3px); }
+    40% { transform: translateX(-2px); }
+    60% { transform: translateX(2px); }
+    100% { transform: translateX(0); }
+}
 .resolve-case-btn {
     padding: 4px 10px;
     border-radius: 6px;

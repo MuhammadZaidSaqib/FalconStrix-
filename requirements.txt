@@ -6,3 +6,4 @@ psutil==5.9.6
 mysql-connector-python==8.2.0
 eventlet==0.33.3
 python-dotenv==1.0.0
+reportlab
