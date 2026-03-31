@@ -1,51 +1,109 @@
-# Host-Based Intrusion Detection and Response System (HIDRS)
+# FalconStrix
 
-This project implements a layered cybersecurity monitoring and response framework designed to run on **Kali Linux** or **Windows** environments.
+**FalconStrix** is a host-based intrusion detection and response platform that combines:
 
-## Pre-requisites
+- a Python backend for event ingestion, persistence, and FSM orchestration,
+- a C++ engine for low-level monitoring and response workflows,
+- a real-time SOC-style Flask dashboard for analysts,
+- and red-team simulation scripts for end-to-end testing.
 
-- **OS**: Windows or Kali Linux (Linux recommended for low-level features).
-- **Database**: MariaDB / MySQL Server.
-- **Python 3.8+**: Essential for the backend and dashboard.
-- **Compiler**: `g++` (for C++ engine on Linux).
+It is designed for practical security demos, academic projects, and SOC workflow experimentation on Windows/Linux labs.
 
-## Installation & Setup
+---
 
-### 1. Database Setup
-1. Create a database named `hidrs_db`.
-2. Import the schema and sample data:
-   ```bash
-   mysql -u root -p hidrs_db < database/schema.sql
-   mysql -u root -p hidrs_db < database/sample_data.sql
-   ```
-   > Note: Ensure DB credentials in `backend/db_connection.py` match your setup.
+## Core Capabilities
 
-### 2. Environment & Dependencies
-We recommend using a virtual environment and the provided `requirements.txt`.
-```powershell
-# On Windows
-python -m venv .venv
-& .venv/Scripts/Activate.ps1
-pip install -r requirements.txt
+- Real-time alert ingestion and event logging
+- Finite State Machine (FSM): `NORMAL`, `WARNING`, `LOCKED`
+- Active defense and case resolution workflows
+- Live Alerts, Resolved Cases, Terminated Processes, and User Activity visibility
+- CSV and professional PDF report exports (dashboard + audit sections)
+- Educational OS concept visualizations (process, threads, sync, IPC, signals, resources)
 
-# On Linux
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+---
+
+## Architecture Overview
+
+FalconStrix follows a layered architecture:
+
+1. **Collectors / Simulators**
+   - Red team scripts and engine components emit structured events.
+2. **Backend Services**
+   - Python services process, classify, persist, and trigger FSM transitions.
+3. **Response Layer**
+   - Response logic performs containment/termination based on policy/state.
+4. **Dashboard Layer**
+   - Flask + Socket.IO provides real-time monitoring and analyst controls.
+
+High-level flow:
+
+`Event Source -> Backend Ingestion -> DB -> FSM Evaluation -> Dashboard + Response`
+
+---
+
+## Tech Stack
+
+- **Backend**: Python, Flask, Flask-SocketIO
+- **Data**: MySQL/MariaDB
+- **Engine**: C++ (Linux-focused runtime path)
+- **Frontend**: HTML/CSS/JavaScript (real-time updates + visualizations)
+- **Reporting**: CSV + PDF (ReportLab)
+
+---
+
+## Prerequisites
+
+- **OS**: Windows 10/11 or Linux (Linux recommended for full C++ engine workflow)
+- **Python**: 3.10+
+- **Database**: MySQL/MariaDB server
+- **Compiler** (Linux/C++ path): `g++` with pthread support
+
+---
+
+## Setup
+
+### 1) Database
+
+Create your database (example: `hidrs_db`) and import SQL files:
+
+```bash
+mysql -u root -p hidrs_db < database/queries.sql
+mysql -u root -p hidrs_db < database/sample_data.sql
 ```
 
-### 3. Compile OS Engine (Blue Team Engine - Linux Only)
+Update DB credentials/environment in backend configuration as needed.
+
+### 2) Python Environment
+
+```powershell
+# Windows
+python -m venv .venv
+.\.venv\Scripts\activate
+.\.venv\Scripts\python -m pip install -r requirements.txt
+```
+
+```bash
+# Linux
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+### 3) C++ Engine Build (Linux path)
+
 ```bash
 cd os_engine_cpp
 g++ -pthread src/main.cpp src/process_monitor.cpp src/behavior_detector.cpp src/response_engine.cpp -I include/ -o os_engine
 ```
 
-## Running the Architecture
+---
 
-To see the system work end-to-end, you need three terminal windows:
+## Run FalconStrix
 
-### 1. Start the Python Backend
-The Python backend listens for OS events, logs to the database, and processes FSM logic.
+Use separate terminals:
+
+### A) Backend Ingestion Service
+
 ```bash
 # Windows
 python backend\main_backend.py
@@ -54,35 +112,78 @@ python backend\main_backend.py
 python3 backend/main_backend.py
 ```
 
-### 2. Start the SOC Dashboard
-The Flask interface provides a real-time SOC-style overview.
+### B) Dashboard Service
+
 ```bash
 # Windows
-cd gui_dashboard
-python app.py
+python gui_dashboard\app.py
 
 # Linux
-cd gui_dashboard
-python3 app.py
+python3 gui_dashboard/app.py
 ```
-Open your browser to: **[http://localhost:5000](http://localhost:5000)**
 
-### 3. Start the OS Engine (Linux Only)
-Monitors the system and feeds data to the backend via named pipe.
+Dashboard URL:
+- `http://127.0.0.1:5001`
+
+### C) C++ Engine (Optional / Linux)
+
 ```bash
 cd os_engine_cpp
 sudo ./os_engine
 ```
 
-## Running Attacks (Red Team)
-Open a separate terminal to simulate attacks and trigger the Blue Team defense.
+---
+
+## Red-Team Simulation
+
 ```bash
 cd red_team_py
 python attack_controller.py
 ```
 
-Select any of the options (1-4).
-- C++ engine (if running) will catch the malicious activity.
-- Python Backend logs event ingestion and **FSM State Changes**.
-- Browser SOC Dashboard will turn red, reflecting the `LOCKED` state.
-- Response Engine will automatically terminate malicious processes.
+This drives test events (e.g., auth failures, process spam, tamper scenarios) to validate:
+
+- event ingestion,
+- FSM escalation/de-escalation,
+- dashboard updates,
+- and response handling.
+
+---
+
+## FSM Behavior (Operational)
+
+- `NORMAL` -> stable operation
+- `WARNING` -> elevated suspicious activity
+- `LOCKED` -> critical posture; analyst intervention required
+
+Return to `NORMAL` occurs when lock conditions are cleared according to backend/DB state and FSM re-evaluation.
+
+---
+
+## Reports
+
+FalconStrix supports:
+
+- CSV exports for operational tables
+- PDF reports for dashboard, user activity, incident summary, resolved cases, and terminated processes
+
+PDF reports include structured sections and severity-aware coloring for quick triage readability.
+
+---
+
+## Troubleshooting
+
+- If dependencies fail in Windows venv, prefer:
+  - `.\.venv\Scripts\python -m pip install -r requirements.txt`
+- If dashboard JS changes do not appear:
+  - hard refresh (`Ctrl+F5`)
+  - ensure dashboard service restarted
+- If API route returns 404 after code changes:
+  - stop old `gui_dashboard\app.py` process and restart
+
+---
+
+## Project Status
+
+FalconStrix is an actively evolving SOC-style platform.  
+Contributions and hardening improvements are welcome.
