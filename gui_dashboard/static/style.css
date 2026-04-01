@@ -2293,6 +2293,64 @@ header {
 .response-card h3 { margin: 0 0 8px; font-size: 1rem; color: var(--text-bright); }
 .response-card p { margin: 0; font-size: 0.84rem; line-height: 1.5; }
 .response-card code { color: var(--accent-blue); font-size: 0.82rem; }
+.viz-response-rail {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    margin: 14px 0 12px;
+}
+.viz-response-step {
+    padding: 8px 6px;
+    border-radius: 10px;
+    border: 1px solid rgba(90, 36, 36, 0.65);
+    background: rgba(23, 10, 10, 0.7);
+    text-align: center;
+    font-size: 0.67rem;
+    color: var(--muted-text);
+    transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.2s;
+}
+.viz-response-step strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+    color: var(--text-bright);
+}
+.viz-response-step.is-active {
+    color: var(--text-color);
+    border-color: rgba(255, 107, 107, 0.6);
+    background: rgba(120, 18, 18, 0.38);
+    transform: translateY(-2px);
+}
+.viz-response-console {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.viz-response-console-line {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(69, 27, 27, 0.8);
+    background: rgba(12, 6, 6, 0.7);
+    font-size: 0.74rem;
+    line-height: 1.45;
+}
+.viz-response-console-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(255, 77, 87, 0.14);
+    border: 1px solid rgba(255, 77, 87, 0.22);
+    color: #ffb1b1;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    min-height: 22px;
+}
 
 /* ═══ DEFENSIVE OVERLAY ══════════════════════════════════════════════════ */
 #defensive-overlay {
@@ -2385,12 +2443,12 @@ header {
         filter: none;
     }
 }
-
 /* ═══ RESPONSIVE ══════════════════════════════════════════════════════════ */
 @media (max-width: 1024px) {
     .concepts-grid { grid-template-columns: repeat(3, 1fr); }
     .os-detail-grid { grid-template-columns: 1fr; }
     .response-info { grid-template-columns: 1fr; }
+    .viz-response-rail { grid-template-columns: repeat(5, minmax(64px, 1fr)); }
 }
 @media (max-width: 768px) {
     .sidebar { transform: translateX(-100%); }
@@ -2406,6 +2464,7 @@ header {
     .concepts-grid { grid-template-columns: repeat(2, 1fr); }
     .dual-grid { grid-template-columns: 1fr; }
     .red-team-grid { grid-template-columns: 1fr; }
+    .viz-response-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .fsm-diagram { flex-direction: column; }
     .fsm-arrow { transform: rotate(90deg); }
     header, .header-status, .panel-heading { flex-wrap: wrap; }

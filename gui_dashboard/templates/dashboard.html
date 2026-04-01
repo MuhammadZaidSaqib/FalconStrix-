@@ -1454,6 +1454,46 @@ void send_event_to_backend(const std::string&amp; event_type,
                         <div class="response-card"><h3>C++ Response Engine</h3><p>Direct process termination from OS engine using <code>kill(pid, SIGKILL)</code> in <code>response_engine.cpp</code> for immediate threat neutralization.</p></div>
                         <div class="response-card"><h3>FSM Auto-Escalation</h3><p>FSM automatically escalates: NORMAL to WARNING (1 HIGH or 3+ MEDIUM) to LOCKED (2+ HIGH). De-escalation happens when alerts are resolved.</p></div>
                     </div>
+                    <div class="detail-section" style="margin-top:20px"><h3>Animated response walkthrough</h3><p class="code-sync-hint">This panel is synced with the animation on the right. The highlight moves through the exact response stages: <strong>idle â†’ threshold crossed â†’ query unresolved alerts â†’ kill target â†’ log + resolve</strong>.</p><pre class="os-process-code-pre" id="response-code-scroll"><code><span class="code-step-block" data-code-phase="response-idle">// response_engine.cpp â€” engine is alive, but no target PID is being killed yet.
+#include "response_engine.h"
+#include &lt;signal.h&gt;
+#include &lt;iostream&gt;
+</span><span class="code-step-block" data-code-phase="response-warning"># Escalation rule summary
+# NORMAL â†’ WARNING when MEDIUM/HIGH alerts accumulate.
+# This is the "prepare to respond" stage.
+</span><span class="code-step-block" data-code-phase="response-query">def active_defense():
+    """Invoked when FSM State -&gt; LOCKED.
+    Kills all processes linked to unresolved HIGH/CRITICAL alerts."""
+    query = """
+    SELECT DISTINCT p.pid, p.process_name, e.event_id
+    FROM Processes p
+    JOIN Events e ON p.process_id = e.process_id
+    JOIN Alerts a ON e.event_id = a.event_id
+    JOIN Severity s ON a.severity_id = s.severity_id
+    WHERE a.is_resolved = FALSE
+      AND s.level_name IN ('HIGH', 'CRITICAL', 'MEDIUM')
+    """
+    bad_procs = fetch_query(query)
+</span><span class="code-step-block" data-code-phase="response-kill">    for proc in bad_procs:
+        pid = proc['pid']
+        name = proc['process_name']
+        try:
+            os.kill(pid, signal.SIGKILL)
+            msg = f"Terminated malicious process {name} (PID: {pid})"
+            print(f"[*] RESPONSE ENGINE: {msg}")
+
+void trigger_response(int pid) {
+    std::cout &lt;&lt; "[RESPONSE] Killing suspicious process PID " &lt;&lt; pid &lt;&lt; std::endl;
+    kill(pid, SIGKILL);
+}
+</span><span class="code-step-block" data-code-phase="response-log">            execute_query(
+                "INSERT INTO Events (event_type, description, source) "
+                "VALUES (%s, %s, %s)",
+                ('RESPONSE_ACTION', msg, 'Response_Engine'))
+            execute_query(
+                "UPDATE Alerts SET is_resolved=TRUE WHERE event_id=%s",
+                (proc['event_id'],))
+</span></code></pre></div>
                     <div class="detail-section" style="margin-top:20px"><h3>Source Code — response_engine.cpp</h3><pre><code>#include "response_engine.h"
 #include &lt;signal.h&gt;
 #include &lt;iostream&gt;
@@ -1496,10 +1536,37 @@ void trigger_response(int pid) {
             print(f"[!] Permission denied to kill PID {pid}")</code></pre></div>
                         </div>
                         <aside class="concept-viz-aside thread-viz-aside" aria-label="Response and FSM">
+                            <div class="res-viz-toolbar" role="group" aria-label="Animation controls">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-response" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-response">Stop</button>
+                                <span class="res-viz-state" id="viz-state-response" aria-live="polite">Running</span>
+                            </div>
+                            <h3 class="thread-viz-title">Response flow (animated from code)</h3>
                             <div id="viz-response-fsm" class="viz-fsm-badge state-normal">FSM: NORMAL</div>
-                            <p class="thread-viz-lead" style="margin-top:0">Escalation drives <strong>active_defense()</strong> and OS-level <strong>SIGKILL</strong>.</p>
+                            <p class="thread-viz-lead" style="margin-top:0">Escalation drives <strong>active_defense()</strong> and OS-level <strong>SIGKILL</strong>. This animation shows when the engine is idle, when the alert thresholds escalate, when Python queries unresolved alerts, and when Python/C++ terminate and log the target.</p>
+                            <div class="viz-response-rail" id="viz-response-rail" data-phase="response-idle">
+                                <div class="viz-response-step" data-response-phase="response-idle"><strong>â‘ </strong><span>Idle</span></div>
+                                <div class="viz-response-step" data-response-phase="response-warning"><strong>â‘¡</strong><span>Threshold</span></div>
+                                <div class="viz-response-step" data-response-phase="response-query"><strong>â‘¢</strong><span>Query</span></div>
+                                <div class="viz-response-step" data-response-phase="response-kill"><strong>â‘£</strong><span>Kill</span></div>
+                                <div class="viz-response-step" data-response-phase="response-log"><strong>â‘¤</strong><span>Log + resolve</span></div>
+                            </div>
+                            <div class="viz-response-console" id="viz-response-console">
+                                <div class="viz-response-console-line"><span class="viz-response-console-tag">FSM</span><span id="viz-response-console-fsm">NORMAL â€” watching alert counts</span></div>
+                                <div class="viz-response-console-line"><span class="viz-response-console-tag">PY</span><span id="viz-response-console-python">active_defense() not running</span></div>
+                                <div class="viz-response-console-line"><span class="viz-response-console-tag">C++</span><span id="viz-response-console-cpp">trigger_response(pid) idle</span></div>
+                            </div>
                             <div id="viz-response-kill-target" class="viz-kill-target">PID 8842 — malicious_proc — candidate → kill(pid, SIGKILL)</div>
                             <p class="viz-dynamic-caption" id="viz-response-caption" style="margin-top:14px"></p>
+                            <div class="viz-pc-explain" id="viz-response-explain" aria-live="polite">
+                                <div class="viz-pc-explain-head">
+                                    <span class="viz-pc-explain-kicker">Current step</span>
+                                    <h4 class="viz-pc-explain-title" id="viz-response-phase-title">Idle monitoring</h4>
+                                </div>
+                                <p class="viz-pc-explain-lead" id="viz-response-phase-lead"></p>
+                                <ul class="viz-pc-explain-list" id="viz-response-phase-bullets"></ul>
+                                <p class="viz-pc-explain-code" id="viz-response-code-ref"></p>
+                            </div>
                         </aside>
                     </div>
                 </section>

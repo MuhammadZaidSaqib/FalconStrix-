@@ -349,7 +349,7 @@ def _alert_counts_window(start, end):
 
 
 def build_incident_trends():
-    """Return resolved vs unresolved alert counts for 12 time buckets per period."""
+    """Return resolved/unresolved counts with period-appropriate date buckets."""
     now = datetime.now()
 
     def mock_period(seed):
@@ -363,25 +363,27 @@ def build_incident_trends():
     if not DB_AVAILABLE:
         return {'weekly': mock_period(1), 'monthly': mock_period(2), 'yearly': mock_period(3)}
 
+    # Weekly: last 7 calendar days (day-wise)
     weekly = {'labels': [], 'resolved': [], 'unresolved': []}
-    for idx in range(12):
-        end = now - timedelta(weeks=(11 - idx))
-        start = end - timedelta(weeks=1)
-        weekly['labels'].append(start.strftime('%m/%d'))
+    for idx in range(7):
+        day = now - timedelta(days=(6 - idx))
+        start = datetime(day.year, day.month, day.day)
+        end = start + timedelta(days=1)
+        weekly['labels'].append(start.strftime('%a'))
         r, u = _alert_counts_window(start, end)
         weekly['resolved'].append(r)
         weekly['unresolved'].append(u)
 
+    # Monthly: current calendar year, Jan -> Dec (month-wise)
     monthly = {'labels': [], 'resolved': [], 'unresolved': []}
-    for idx in range(12):
-        off = 11 - idx
-        y, m = _add_calendar_months(now.year, now.month, -off)
-        start, end = _month_start_end(y, m)
+    for m in range(1, 13):
+        start, end = _month_start_end(now.year, m)
         monthly['labels'].append(start.strftime('%b'))
         r, u = _alert_counts_window(start, end)
         monthly['resolved'].append(r)
         monthly['unresolved'].append(u)
 
+    # Yearly: last 12 years (year-wise)
     yearly = {'labels': [], 'resolved': [], 'unresolved': []}
     for idx in range(12):
         year = now.year - (11 - idx)

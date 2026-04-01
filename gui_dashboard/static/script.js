@@ -201,6 +201,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const vizFsmBadge = document.getElementById('viz-response-fsm');
     const vizKillTarget = document.getElementById('viz-response-kill-target');
     const vizResponseCaption = document.getElementById('viz-response-caption');
+    const vizResponseRail = document.getElementById('viz-response-rail');
+    const vizResponseSteps = document.querySelectorAll('[data-response-phase]');
+    const vizResponseConsoleFsm = document.getElementById('viz-response-console-fsm');
+    const vizResponseConsolePython = document.getElementById('viz-response-console-python');
+    const vizResponseConsoleCpp = document.getElementById('viz-response-console-cpp');
+    const vizResponsePhaseTitle = document.getElementById('viz-response-phase-title');
+    const vizResponsePhaseLead = document.getElementById('viz-response-phase-lead');
+    const vizResponsePhaseBullets = document.getElementById('viz-response-phase-bullets');
+    const vizResponseCodeRef = document.getElementById('viz-response-code-ref');
 
     const rtLoginCaption = document.getElementById('viz-rt-login-caption');
     const rtLoginTrack = document.getElementById('viz-rt-login-track');
@@ -488,6 +497,7 @@ document.addEventListener("DOMContentLoaded", () => {
         'os-ipc': 'os-ipc-code-scroll',
         'os-signals': 'os-signals-code-scroll',
         'os-resources': 'os-resources-code-scroll',
+        'response': 'response-code-scroll',
     };
 
     const VIZ_PAGES = new Set([
@@ -510,6 +520,7 @@ document.addEventListener("DOMContentLoaded", () => {
         'os-ipc',
         'os-signals',
         'os-resources',
+        'response',
     ]);
 
     function stopConceptViz() {
@@ -1142,6 +1153,105 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function updateResponseVizTeaching(elapsed) {
+        const p = 9000;
+        const t = elapsed % p;
+        let phase = 'response-idle';
+        if (t >= 3000 && t < 6000) phase = 'response-warning';
+        else if (t >= 6000 && t < 6900) phase = 'response-query';
+        else if (t >= 6900 && t < 8200) phase = 'response-kill';
+        else if (t >= 8200) phase = 'response-log';
+
+        if (vizResponseRail) vizResponseRail.setAttribute('data-phase', phase);
+        if (vizResponseSteps.length) {
+            vizResponseSteps.forEach((step) => {
+                step.classList.toggle('is-active', step.getAttribute('data-response-phase') === phase);
+            });
+        }
+        if (vizKillTarget) {
+            if (phase === 'response-log') {
+                vizKillTarget.classList.remove('struck');
+                vizKillTarget.textContent = 'PID 8842 â€” malicious_proc â€” event logged, alert resolved';
+            }
+        }
+        if (vizResponseConsoleFsm) {
+            if (phase === 'response-idle') vizResponseConsoleFsm.textContent = 'NORMAL â€” watching alert counts';
+            else if (phase === 'response-warning') vizResponseConsoleFsm.textContent = 'WARNING â€” thresholds crossed, escalation building';
+            else vizResponseConsoleFsm.textContent = 'LOCKED â€” active response permitted';
+        }
+        if (vizResponseConsolePython) {
+            if (phase === 'response-idle') vizResponseConsolePython.textContent = 'active_defense() not running';
+            else if (phase === 'response-warning') vizResponseConsolePython.textContent = 'Waiting for LOCKED before querying unresolved alerts';
+            else if (phase === 'response-query') vizResponseConsolePython.textContent = 'Running SQL query for unresolved HIGH/CRITICAL/MEDIUM processes';
+            else if (phase === 'response-kill') vizResponseConsolePython.textContent = 'Looping through bad_procs and calling os.kill(pid, SIGKILL)';
+            else vizResponseConsolePython.textContent = 'Writing RESPONSE_ACTION event and resolving linked alert';
+        }
+        if (vizResponseConsoleCpp) {
+            if (phase === 'response-kill') vizResponseConsoleCpp.textContent = 'trigger_response(pid) / kill(pid, SIGKILL) executing';
+            else if (phase === 'response-log') vizResponseConsoleCpp.textContent = 'Kill completed â€” control returns to monitoring';
+            else vizResponseConsoleCpp.textContent = 'trigger_response(pid) idle';
+        }
+        if (vizResponsePhaseTitle && vizResponsePhaseLead && vizResponsePhaseBullets && vizResponseCodeRef) {
+            const responseExplain = {
+                'response-idle': {
+                    title: 'Idle monitoring',
+                    lead: 'The response engine is armed but passive. Alerts are still being counted, so no process termination happens yet.',
+                    bullets: [
+                        'FSM stays in NORMAL while risk thresholds are not crossed.',
+                        'No PID is selected, so kill() and os.kill() are not called.',
+                        'The code highlight stays on the idle block to show the engine waiting.'
+                    ],
+                    code: 'Code focus: response_engine.cpp setup â†’ no target PID yet'
+                },
+                'response-warning': {
+                    title: 'Threshold crossed',
+                    lead: 'Accumulated MEDIUM/HIGH alerts move the FSM into WARNING, which is the pre-response stage.',
+                    bullets: [
+                        'The system has enough suspicious evidence to escalate.',
+                        'Response logic is getting ready, but termination is still not active.',
+                        'This separates observation from active defense.'
+                    ],
+                    code: 'Code focus: escalation rules â†’ NORMAL to WARNING'
+                },
+                'response-query': {
+                    title: 'Query unresolved alerts',
+                    lead: 'Once the FSM reaches LOCKED, Python enters active_defense() and fetches suspicious processes tied to unresolved alerts.',
+                    bullets: [
+                        'The SQL query joins Processes, Events, Alerts, and Severity.',
+                        'Only unresolved alerts are considered.',
+                        'The result is a list of PIDs that can be neutralized.'
+                    ],
+                    code: 'Code focus: process_service.py â†’ query + fetch_query(query)'
+                },
+                'response-kill': {
+                    title: 'Terminate the target',
+                    lead: 'The response loop selects a PID from bad_procs and terminates it with SIGKILL for immediate neutralization.',
+                    bullets: [
+                        'Python calls os.kill(pid, SIGKILL) inside active_defense().',
+                        'The C++ response path mirrors the same behavior with kill(pid, SIGKILL).',
+                        'The target line is struck through to show the kill has been issued.'
+                    ],
+                    code: 'Code focus: active_defense() / trigger_response(pid) â†’ kill'
+                },
+                'response-log': {
+                    title: 'Log and resolve',
+                    lead: 'After the kill, the backend records a RESPONSE_ACTION event and marks the linked alert as resolved.',
+                    bullets: [
+                        'The event log preserves what process was terminated.',
+                        'The alert row is updated so it no longer remains unresolved.',
+                        'Control returns to monitoring, ready for the next escalation.'
+                    ],
+                    code: 'Code focus: execute_query(INSERT ...) + UPDATE Alerts SET is_resolved=TRUE'
+                }
+            }[phase];
+            vizResponsePhaseTitle.textContent = responseExplain.title;
+            vizResponsePhaseLead.textContent = responseExplain.lead;
+            vizResponsePhaseBullets.innerHTML = responseExplain.bullets.map((item) => `<li>${item}</li>`).join('');
+            vizResponseCodeRef.textContent = responseExplain.code;
+        }
+        syncConceptCodeHighlight('response-code-scroll', phase);
+    }
+
     let conceptVizFrameSkip = 1;
     function conceptVizFrame(now) {
         /* IPC / sync / signals: lower FPS to cut CPU; other viz pages stay ~30fps */
@@ -1182,6 +1292,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 break;
             case 'response':
                 updateResponseViz(elapsed);
+                updateResponseVizTeaching(elapsed);
                 break;
             default:
                 break;
@@ -2225,8 +2336,32 @@ document.addEventListener("DOMContentLoaded", () => {
             data: {
                 labels: Array.from({length: 15}, (_, i) => i),
                 datasets: [
-                    { label: 'Malware', data: [12,19,3,5,2,3,15,10,25,30,12,8,5,10,20], borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.2)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 0 },
-                    { label: 'Phishing', data: [5,2,10,15,8,5,20,5,12,8,2,7,12,5,10], borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)', fill: false, tension: 0.4, borderWidth: 2, pointRadius: 0 }
+                    {
+                        label: 'Malware',
+                        data: [12,19,3,5,2,3,15,10,25,30,12,8,5,10,20],
+                        borderColor: '#60a5fa',
+                        backgroundColor: 'rgba(96,165,250,0.2)',
+                        fill: true,
+                        tension: 0.5,
+                        cubicInterpolationMode: 'monotone',
+                        borderWidth: 2.5,
+                        borderCapStyle: 'round',
+                        borderJoinStyle: 'round',
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Phishing',
+                        data: [5,2,10,15,8,5,20,5,12,8,2,7,12,5,10],
+                        borderColor: '#f87171',
+                        backgroundColor: 'rgba(248,113,113,0.1)',
+                        fill: false,
+                        tension: 0.5,
+                        cubicInterpolationMode: 'monotone',
+                        borderWidth: 2.5,
+                        borderCapStyle: 'round',
+                        borderJoinStyle: 'round',
+                        pointRadius: 0
+                    }
                 ]
             },
             options: {
@@ -2257,7 +2392,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 maintainAspectRatio: false,
                 animation: false,
                 plugins: { legend: { display: false } },
-                scales: { y: { display: false }, x: { display: false } }
+                scales: {
+                    y: {
+                        display: true,
+                        beginAtZero: true,
+                        ticks: { color: 'rgba(240, 218, 218, 0.55)', maxTicksLimit: 4 },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    },
+                    x: {
+                        display: true,
+                        ticks: {
+                            color: 'rgba(240, 218, 218, 0.72)',
+                            autoSkip: true,
+                            maxRotation: 0
+                        },
+                        grid: { display: false }
+                    }
+                }
             }
         });
     }
@@ -2271,10 +2422,67 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!incidentsChart || !cachedIncidentTrends) return;
         const p = period && cachedIncidentTrends[period] ? cachedIncidentTrends[period] : cachedIncidentTrends.weekly;
         if (!p || !p.labels) return;
-        incidentsChart.data.labels = p.labels;
+        const maxTicksByPeriod = period === 'weekly' ? 7 : (period === 'monthly' ? 10 : 12);
+        let labels = Array.isArray(p.labels) ? p.labels.slice() : [];
+        let resolved = Array.isArray(p.resolved) ? p.resolved.slice() : [];
+        let unresolved = Array.isArray(p.unresolved) ? p.unresolved.slice() : [];
+
+        // Normalize month/year ordering client-side so chart remains readable
+        // even if backend sends rolling-window labels.
+        if (period === 'weekly' && labels.length) {
+            const weekOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const norm = (v) => String(v || '').trim().slice(0, 3).toLowerCase();
+            const rows = labels.map((lbl, i) => ({
+                label: String(lbl || ''),
+                key: norm(lbl),
+                r: Number(resolved[i] || 0),
+                u: Number(unresolved[i] || 0),
+            }));
+            const isWeekdayLike = rows.some((row) =>
+                ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].includes(row.key)
+            );
+            if (isWeekdayLike) {
+                labels = weekOrder;
+                resolved = weekOrder.map((d) => {
+                    const hit = rows.find((row) => row.key === d.toLowerCase());
+                    return hit ? hit.r : 0;
+                });
+                unresolved = weekOrder.map((d) => {
+                    const hit = rows.find((row) => row.key === d.toLowerCase());
+                    return hit ? hit.u : 0;
+                });
+            }
+        } else if (period === 'monthly' && labels.length) {
+            const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const idxMap = monthOrder.map((m) => labels.indexOf(m));
+            if (idxMap.some((idx) => idx !== -1)) {
+                labels = monthOrder;
+                resolved = idxMap.map((idx) => (idx >= 0 ? Number(resolved[idx] || 0) : 0));
+                unresolved = idxMap.map((idx) => (idx >= 0 ? Number(unresolved[idx] || 0) : 0));
+            }
+        } else if (period === 'yearly' && labels.length) {
+            const rows = labels.map((lbl, i) => ({
+                label: String(lbl),
+                year: Number.parseInt(lbl, 10),
+                r: Number(resolved[i] || 0),
+                u: Number(unresolved[i] || 0),
+            }));
+            if (rows.every((row) => Number.isFinite(row.year))) {
+                rows.sort((a, b) => a.year - b.year);
+                labels = rows.map((row) => row.label);
+                resolved = rows.map((row) => row.r);
+                unresolved = rows.map((row) => row.u);
+            }
+        }
+
+        incidentsChart.data.labels = labels;
         if (incidentsChart.data.datasets && incidentsChart.data.datasets.length >= 2) {
-            incidentsChart.data.datasets[0].data = p.resolved || [];
-            incidentsChart.data.datasets[1].data = p.unresolved || [];
+            incidentsChart.data.datasets[0].data = resolved;
+            incidentsChart.data.datasets[1].data = unresolved;
+        }
+        if (incidentsChart.options?.scales?.x?.ticks) {
+            incidentsChart.options.scales.x.ticks.maxTicksLimit = maxTicksByPeriod;
+            incidentsChart.options.scales.x.ticks.autoSkip = period !== 'weekly';
         }
         incidentsChart.update('none');
     }
