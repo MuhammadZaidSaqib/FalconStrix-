@@ -1,12 +1,6 @@
 USE hidrs_db;
 
--- Backfill historical alerts/events so Weekly/Monthly/Yearly incident trends
--- are populated with real dated records (no synthetic frontend/backend fill).
---
--- Safe behavior:
--- 1) Inserts dedicated "trend seed" events only if missing for each date bucket.
--- 2) Inserts alerts for those events only if missing.
--- 3) Uses CURRENT_DATE anchors so it always creates the latest windows.
+
 
 INSERT INTO Events (event_type, description, source, process_id, user_id, timestamp)
 WITH RECURSIVE seq AS (
