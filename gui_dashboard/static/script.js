@@ -56,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ═══ Sidebar Navigation ══════════════════════════════════════════════
     const sidebar = document.getElementById('sidebar');
     const sidebarBackdrop = document.getElementById('sidebar-backdrop');
-    const sidebarToggle = document.getElementById('sidebar-toggle');
+   const sidebarHoverTab = document.querySelector('.sidebar-hover-tab');
     const navItems = document.querySelectorAll('.nav-item');
     const pages = document.querySelectorAll('.page');
 
@@ -74,8 +74,30 @@ document.addEventListener("DOMContentLoaded", () => {
         'os-ipc': 'Inter-Process Communication',
         'os-signals': 'Signal Handling',
         'os-resources': 'Resource Monitoring',
+        'os-procfs': '/proc Filesystem',
+        'os-concurrency': 'Concurrency Design',
+        'os-fault': 'Fault Tolerance',
         'red-team': 'Red Team Simulation',
         'response': 'Response Engine'
+    };
+
+    const setSidebarAlertCount = (nextCount) => {
+        if (!sidebarAlertCount) return;
+        const normalized = Math.max(0, Number(nextCount) || 0);
+        const prev = Number(sidebarAlertCount.dataset.count || sidebarAlertCount.textContent || 0);
+        sidebarAlertCount.textContent = String(normalized);
+        sidebarAlertCount.dataset.count = String(normalized);
+        if (normalized !== prev) {
+            sidebarAlertCount.classList.remove('bump');
+            void sidebarAlertCount.offsetWidth;
+            sidebarAlertCount.classList.add('bump');
+            const navAlertsBtn = document.getElementById('nav-alerts');
+            if (navAlertsBtn) {
+                navAlertsBtn.classList.remove('just-updated');
+                void navAlertsBtn.offsetWidth;
+                navAlertsBtn.classList.add('just-updated');
+            }
+        }
     };
 
     const laneMonitor = document.getElementById('thread-viz-monitor');
@@ -440,7 +462,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (rtResetBtn) rtResetBtn.addEventListener('click', rtOnReset);
 
     // Start/Stop controls for OS concept animations
-    const conceptPages = ['os-process', 'os-threads', 'os-sync', 'os-ipc', 'os-signals', 'os-resources'];
+    const conceptPages = ['os-process', 'os-threads', 'os-sync', 'os-ipc', 'os-signals', 'os-resources', 'os-procfs', 'os-concurrency', 'os-fault', 'response'];
     conceptPages.forEach((pageName) => {
         const startBtn = document.getElementById(`viz-btn-start-${pageName}`);
         const stopBtn = document.getElementById(`viz-btn-stop-${pageName}`);
@@ -457,11 +479,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     const resPrevBtn = document.getElementById('viz-btn-prev-os-resources');
     const resNextBtn = document.getElementById('viz-btn-next-os-resources');
+    const responsePrevBtn = document.getElementById('viz-btn-prev-response');
+    const responseNextBtn = document.getElementById('viz-btn-next-response');
     if (resPrevBtn) {
-        resPrevBtn.addEventListener('click', () => stepResourcesViz(-1));
+        resPrevBtn.addEventListener('click', () => stepConceptViz('os-resources', -1));
     }
     if (resNextBtn) {
-        resNextBtn.addEventListener('click', () => stepResourcesViz(1));
+        resNextBtn.addEventListener('click', () => stepConceptViz('os-resources', 1));
+    }
+    if (responsePrevBtn) {
+        responsePrevBtn.addEventListener('click', () => stepConceptViz('response', -1));
+    }
+    if (responseNextBtn) {
+        responseNextBtn.addEventListener('click', () => stepConceptViz('response', 1));
     }
 
     let conceptVizRaf = null;
@@ -471,6 +501,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let conceptVizFrozenElapsed = 0;
     const RESOURCE_VIZ_STEP_MS = 5000;
     const RESOURCE_VIZ_STEP_COUNT = 6;
+    const RESPONSE_VIZ_PERIOD_MS = 9000;
+    const RESPONSE_VIZ_STEP_OFFSETS_MS = [0, 3000, 6000, 6900, 8200];
     const lastConceptCodePhase = {};
 
     function syncConceptCodeHighlight(scrollId, phase) {
@@ -497,6 +529,9 @@ document.addEventListener("DOMContentLoaded", () => {
         'os-ipc': 'os-ipc-code-scroll',
         'os-signals': 'os-signals-code-scroll',
         'os-resources': 'os-resources-code-scroll',
+        'os-procfs': 'os-procfs-code-scroll',
+        'os-concurrency': 'os-concurrency-code-scroll',
+        'os-fault': 'os-fault-code-scroll',
         'response': 'response-code-scroll',
     };
 
@@ -507,6 +542,9 @@ document.addEventListener("DOMContentLoaded", () => {
         'os-ipc',
         'os-signals',
         'os-resources',
+        'os-procfs',
+        'os-concurrency',
+        'os-fault',
         'os-threads',
         'red-team',
         'response'
@@ -520,6 +558,9 @@ document.addEventListener("DOMContentLoaded", () => {
         'os-ipc',
         'os-signals',
         'os-resources',
+        'os-procfs',
+        'os-concurrency',
+        'os-fault',
         'response',
     ]);
 
@@ -549,20 +590,46 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? (conceptVizPaused ? 'Paused' : 'Running')
                 : '';
         });
-        const prevBtn = document.getElementById('viz-btn-prev-os-resources');
-        const nextBtn = document.getElementById('viz-btn-next-os-resources');
-        const canStep = conceptVizPage === 'os-resources' && conceptVizPaused;
-        if (prevBtn) prevBtn.disabled = !canStep;
-        if (nextBtn) nextBtn.disabled = !canStep;
+        const resourceCanStep = conceptVizPage === 'os-resources' && conceptVizPaused;
+        if (resPrevBtn) resPrevBtn.disabled = !resourceCanStep;
+        if (resNextBtn) resNextBtn.disabled = !resourceCanStep;
+        const responseCanStep = conceptVizPage === 'response' && conceptVizPaused;
+        if (responsePrevBtn) responsePrevBtn.disabled = !responseCanStep;
+        if (responseNextBtn) responseNextBtn.disabled = !responseCanStep;
     }
 
-    function stepResourcesViz(dir) {
-        if (conceptVizPage !== 'os-resources' || !conceptVizPaused) return;
-        const currentPhase = Math.floor(conceptVizFrozenElapsed / RESOURCE_VIZ_STEP_MS) % RESOURCE_VIZ_STEP_COUNT;
-        const nextPhase = (currentPhase + dir + RESOURCE_VIZ_STEP_COUNT) % RESOURCE_VIZ_STEP_COUNT;
-        conceptVizFrozenElapsed = nextPhase * RESOURCE_VIZ_STEP_MS;
-        updateOsResourcesViz(conceptVizFrozenElapsed);
-        updateResVizToolbar();
+    function stepConceptViz(pageName, dir) {
+        if (conceptVizPage !== pageName || !conceptVizPaused) return;
+
+        if (pageName === 'os-resources') {
+            const currentPhase = Math.floor(conceptVizFrozenElapsed / RESOURCE_VIZ_STEP_MS) % RESOURCE_VIZ_STEP_COUNT;
+            const nextPhase = (currentPhase + dir + RESOURCE_VIZ_STEP_COUNT) % RESOURCE_VIZ_STEP_COUNT;
+            conceptVizFrozenElapsed = nextPhase * RESOURCE_VIZ_STEP_MS;
+            updateOsResourcesViz(conceptVizFrozenElapsed);
+            updateResVizToolbar();
+            return;
+        }
+
+        if (pageName === 'response') {
+            const t = conceptVizFrozenElapsed % RESPONSE_VIZ_PERIOD_MS;
+            let currentIdx = RESPONSE_VIZ_STEP_OFFSETS_MS.length - 1;
+            for (let i = 0; i < RESPONSE_VIZ_STEP_OFFSETS_MS.length; i++) {
+                const start = RESPONSE_VIZ_STEP_OFFSETS_MS[i];
+                const end = i === RESPONSE_VIZ_STEP_OFFSETS_MS.length - 1
+                    ? RESPONSE_VIZ_PERIOD_MS
+                    : RESPONSE_VIZ_STEP_OFFSETS_MS[i + 1];
+                if (t >= start && t < end) {
+                    currentIdx = i;
+                    break;
+                }
+            }
+            const nextIdx =
+                (currentIdx + dir + RESPONSE_VIZ_STEP_OFFSETS_MS.length) % RESPONSE_VIZ_STEP_OFFSETS_MS.length;
+            conceptVizFrozenElapsed = RESPONSE_VIZ_STEP_OFFSETS_MS[nextIdx];
+            updateResponseViz(conceptVizFrozenElapsed);
+            updateResponseVizTeaching(conceptVizFrozenElapsed);
+            updateResVizToolbar();
+        }
     }
 
     function pauseResourcesViz() {
@@ -1252,6 +1319,87 @@ document.addEventListener("DOMContentLoaded", () => {
         syncConceptCodeHighlight('response-code-scroll', phase);
     }
 
+    function updateOsProcfsViz(elapsed) {
+        const p = 8000;
+        const t = elapsed % p;
+        let phase = 'procfs-scan';
+        if (t >= 2000 && t < 4000) phase = 'procfs-comm';
+        else if (t >= 4000 && t < 6000) phase = 'procfs-cmdline';
+        else if (t >= 6000) phase = 'procfs-status';
+
+        const rail = document.getElementById('viz-procfs-rail');
+        if (rail) rail.setAttribute('data-phase', phase);
+        document.querySelectorAll('[data-procfs-phase]').forEach((node) => {
+            node.classList.toggle('is-active', node.getAttribute('data-procfs-phase') === phase);
+        });
+        const status = document.getElementById('viz-procfs-status');
+        if (status) {
+            status.textContent =
+                phase === 'procfs-scan'
+                    ? 'Scanning /proc for numeric PID directories...'
+                    : phase === 'procfs-comm'
+                        ? 'Reading /proc/[pid]/comm to get short process names.'
+                        : phase === 'procfs-cmdline'
+                            ? 'Reading /proc/[pid]/cmdline for full launch command.'
+                            : 'Reading /proc/[pid]/status (state, threads, memory fields).';
+        }
+        syncConceptCodeHighlight('os-procfs-code-scroll', phase);
+    }
+
+    function updateOsConcurrencyViz(elapsed) {
+        const p = 8000;
+        const t = elapsed % p;
+        let phase = 'conc-fork';
+        if (t >= 2000 && t < 4000) phase = 'conc-thread';
+        else if (t >= 4000 && t < 6000) phase = 'conc-join';
+        else if (t >= 6000) phase = 'conc-service';
+
+        const rail = document.getElementById('viz-concurrency-rail');
+        if (rail) rail.setAttribute('data-phase', phase);
+        document.querySelectorAll('[data-concurrency-phase]').forEach((node) => {
+            node.classList.toggle('is-active', node.getAttribute('data-concurrency-phase') === phase);
+        });
+        const status = document.getElementById('viz-concurrency-status');
+        if (status) {
+            status.textContent =
+                phase === 'conc-fork'
+                    ? 'Parent forks; child prepares worker threads.'
+                    : phase === 'conc-thread'
+                        ? 'Monitor, detector, resource, and response threads run in parallel.'
+                        : phase === 'conc-join'
+                            ? 'Child joins all worker threads before returning.'
+                            : 'Python backend/dashboard fan out into service-level concurrency.';
+        }
+        syncConceptCodeHighlight('os-concurrency-code-scroll', phase);
+    }
+
+    function updateOsFaultViz(elapsed) {
+        const p = 8000;
+        const t = elapsed % p;
+        let phase = 'fault-wait';
+        if (t >= 2000 && t < 4000) phase = 'fault-check';
+        else if (t >= 4000 && t < 6000) phase = 'fault-restart';
+        else if (t >= 6000) phase = 'fault-stable';
+
+        const rail = document.getElementById('viz-fault-rail');
+        if (rail) rail.setAttribute('data-phase', phase);
+        document.querySelectorAll('[data-fault-phase]').forEach((node) => {
+            node.classList.toggle('is-active', node.getAttribute('data-fault-phase') === phase);
+        });
+        const status = document.getElementById('viz-fault-status');
+        if (status) {
+            status.textContent =
+                phase === 'fault-wait'
+                    ? 'Parent is blocking in waitpid() while child runs.'
+                    : phase === 'fault-check'
+                        ? 'Exit status is evaluated with WIFEXITED/WIFSIGNALED.'
+                        : phase === 'fault-restart'
+                            ? 'Abnormal exit path -> sleep(2) then restart child.'
+                            : 'Stable cycle complete; supervisor keeps monitoring.';
+        }
+        syncConceptCodeHighlight('os-fault-code-scroll', phase);
+    }
+
     let conceptVizFrameSkip = 1;
     function conceptVizFrame(now) {
         /* IPC / sync / signals: lower FPS to cut CPU; other viz pages stay ~30fps */
@@ -1283,6 +1431,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 break;
             case 'os-resources':
                 updateOsResourcesViz(elapsed);
+                break;
+            case 'os-procfs':
+                updateOsProcfsViz(elapsed);
+                break;
+            case 'os-concurrency':
+                updateOsConcurrencyViz(elapsed);
+                break;
+            case 'os-fault':
+                updateOsFaultViz(elapsed);
                 break;
             case 'os-concepts':
                 updateOsConceptsViz(elapsed);
@@ -1370,6 +1527,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (targetNav) targetNav.classList.add('active');
         if (pageTitle && pageTitles[pageName]) pageTitle.textContent = pageTitles[pageName];
         window.scrollTo(0, 0);
+        if (sidebar) sidebar.classList.remove('hover-open');
 
         if (ipcStatusTimer) {
             clearInterval(ipcStatusTimer);
@@ -1440,17 +1598,39 @@ document.addEventListener("DOMContentLoaded", () => {
     if (menuToggle && sidebar) {
         menuToggle.addEventListener('click', () => {
             sidebar.classList.toggle('open');
+            menuToggle.setAttribute('aria-expanded', String(sidebar.classList.contains('open')));
+        });
+    }
+    if (sidebarHoverTab && sidebar) {
+        sidebarHoverTab.addEventListener('mouseenter', () => {
+            if (!sidebar.classList.contains('open') && !sidebar.classList.contains('pinned')) {
+                sidebar.classList.add('hover-open');
+            }
+        });
+    }
+    if (sidebar) {
+        sidebar.addEventListener('mouseleave', () => {
+            if (!sidebar.classList.contains('open') && !sidebar.classList.contains('pinned')) {
+                sidebar.classList.remove('hover-open');
+            }
         });
     }
     if (sidebarBackdrop && sidebar) {
         sidebarBackdrop.addEventListener('click', () => {
             sidebar.classList.remove('open');
+            sidebar.classList.remove('hover-open');
         });
     }
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || !sidebar) return;
+        sidebar.classList.remove('open');
+        sidebar.classList.remove('hover-open');
+    });
     navItems.forEach(item => {
         item.addEventListener('click', () => {
             if (sidebar) {
                 sidebar.classList.remove('open');
+                sidebar.classList.remove('hover-open');
             }
         });
     });
@@ -2717,7 +2897,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (activeAlertsValue) activeAlertsValue.textContent = activeAlerts.length;
         if (responseActionsValue) responseActionsValue.textContent = data.kill_cnt || 0;
-        if (sidebarAlertCount) sidebarAlertCount.textContent = activeAlerts.length;
+        setSidebarAlertCount(activeAlerts.length);
         
         // Update new dashboard elements
         const dashActive = document.getElementById('dash-active-threats');
@@ -2881,7 +3061,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const trackedCount = alertList.querySelectorAll('tr').length;
         if (feedCount) feedCount.textContent = `${trackedCount} tracked/SIEM`;
-        if (sidebarAlertCount) sidebarAlertCount.textContent = trackedCount;
+        setSidebarAlertCount(trackedCount);
 
         // Increment IPC message count
         ipcMessageCount++;
@@ -2901,7 +3081,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const dashResolved = document.getElementById('dash-resolved');
         if (dashKills) dashKills.textContent = data.kill_cnt || 0;
         if (dashResolved && data.resolved_cases !== undefined) dashResolved.textContent = data.resolved_cases || 0;
-        if (sidebarAlertCount) sidebarAlertCount.textContent = activeAlerts;
+        setSidebarAlertCount(activeAlerts);
 
         applySeverityCounts(counts);
         updateAnalysis(statusBadge.textContent.replace('STATE: ', ''), counts, activeAlerts, eventsLastMin);

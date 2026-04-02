@@ -42,6 +42,9 @@
                 <button class="nav-item" data-page="os-ipc" id="nav-os-ipc"><span class="nav-text">IPC Pipes</span></button>
                 <button class="nav-item" data-page="os-signals" id="nav-os-signals"><span class="nav-text">Signal Handling</span></button>
                 <button class="nav-item" data-page="os-resources" id="nav-os-resources"><span class="nav-text">Resource Monitor</span></button>
+                <button class="nav-item" data-page="os-procfs" id="nav-os-procfs"><span class="nav-text">/proc Filesystem</span></button>
+                <button class="nav-item" data-page="os-concurrency" id="nav-os-concurrency"><span class="nav-text">Concurrency Design</span></button>
+                <button class="nav-item" data-page="os-fault" id="nav-os-fault"><span class="nav-text">Fault Tolerance</span></button>
                 <div class="nav-section-label">Actions</div>
                 <button class="nav-item" data-page="red-team" id="nav-red-team"><span class="nav-text">Red Team Simulation</span></button>
                 <button class="nav-item" data-page="response" id="nav-response"><span class="nav-text">Response Engine</span></button>
@@ -299,10 +302,10 @@
                         <div class="concept-card" data-concept="4" data-page="os-ipc"><div class="concept-info"><strong>IPC Named Pipes</strong><span>FIFO between C++ and Python</span></div><div class="concept-stat active-stat" id="ipc-stat">0 msgs</div></div>
                         <div class="concept-card" data-concept="5" data-page="os-signals"><div class="concept-info"><strong>Signal Handling</strong><span>SIGINT, SIGTERM handlers</span></div><div class="concept-stat active-stat">Registered</div></div>
                         <div class="concept-card" data-concept="6" data-page="response"><div class="concept-info"><strong>Process Termination</strong><span>kill(pid, SIGKILL)</span></div><div class="concept-stat" id="kill-stat">0 killed</div></div>
-                        <div class="concept-card" data-concept="7" data-page="os-process"><div class="concept-info"><strong>/proc Filesystem</strong><span>comm, cmdline, status</span></div><div class="concept-stat active-stat">Reading</div></div>
+                        <div class="concept-card" data-concept="7" data-page="os-procfs"><div class="concept-info"><strong>/proc Filesystem</strong><span>comm, cmdline, status</span></div><div class="concept-stat active-stat">Reading</div></div>
                         <div class="concept-card" data-concept="8" data-page="os-resources"><div class="concept-info"><strong>Resource Monitor</strong><span>CPU &amp; Memory tracking</span></div><div class="concept-stat" id="cpu-stat">0% CPU</div></div>
-                        <div class="concept-card" data-concept="9" data-page="os-threads"><div class="concept-info"><strong>Concurrency Design</strong><span>Multi-process + multi-thread</span></div><div class="concept-stat active-stat">Parallel</div></div>
-                        <div class="concept-card" data-concept="10" data-page="os-process"><div class="concept-info"><strong>Fault Tolerance</strong><span>Supervision restart loop</span></div><div class="concept-stat active-stat">Supervising</div></div>
+                        <div class="concept-card" data-concept="9" data-page="os-concurrency"><div class="concept-info"><strong>Concurrency Design</strong><span>Multi-process + multi-thread</span></div><div class="concept-stat active-stat">Parallel</div></div>
+                        <div class="concept-card" data-concept="10" data-page="os-fault"><div class="concept-info"><strong>Fault Tolerance</strong><span>Supervision restart loop</span></div><div class="concept-stat active-stat">Supervising</div></div>
                     </div>
                 </section>
             </main>
@@ -474,11 +477,11 @@
                     <div class="panel-heading"><h2>Operating System Concepts Used</h2><span class="panel-caption">10 concepts fully integrated</span></div>
                     <p class="detail-hint os-concepts-readme"><strong>How to use this page:</strong> each card opens a <strong>full topic page</strong> with real source, a live diagram, and code that <strong>highlights in sync</strong> with the animation (usually 5 seconds per step). The engine ties these ideas together—e.g. threads share a mutex, signals stop them, IPC ships events to Python.</p>
                     <div class="os-detail-grid">
-                        <div class="os-detail-card" data-page="os-process">
+                        <div class="os-detail-card" data-page="os-procfs">
                             <div class="os-detail-header"><h3>Process Creation &amp; Management</h3></div>
                             <div class="os-detail-body"><p>Implemented using <code>fork()</code> in <code>main.cpp</code>. Parent supervises the system while child runs the monitoring engine. Uses <code>waitpid()</code> for zombie process handling.</p><p>After <code>fork</code>, parent and child are separate processes: different memory, same program text until they diverge.</p><div class="os-tags"><span class="os-tag">fork()</span><span class="os-tag">wait()</span><span class="os-tag">PCB</span><span class="os-tag">Parent-Child</span></div></div>
                         </div>
-                        <div class="os-detail-card" data-page="os-threads">
+                        <div class="os-detail-card" data-page="os-concurrency">
                             <div class="os-detail-header"><h3>Multithreading (Concurrency)</h3></div>
                             <div class="os-detail-body"><p>Uses POSIX threads for parallel execution: process monitoring, behavioral detection, resource monitoring — all running concurrently.</p><p>Threads are lighter than processes: same PID, shared globals, but independent call stacks and instruction pointers.</p><div class="os-tags"><span class="os-tag">pthread_create</span><span class="os-tag">pthread_join</span><span class="os-tag">Parallel</span></div></div>
                         </div>
@@ -498,7 +501,7 @@
                             <div class="os-detail-header"><h3>Process Control &amp; Termination</h3></div>
                             <div class="os-detail-body"><p>Suspicious processes terminated using <code>kill(pid, SIGKILL)</code> in both C++ and Python. OS-level enforcement.</p><p><code>SIGKILL</code> cannot be caught—use only when you intend to tear the target down immediately.</p><div class="os-tags"><span class="os-tag">kill()</span><span class="os-tag">SIGKILL</span><span class="os-tag">os.kill()</span></div></div>
                         </div>
-                        <div class="os-detail-card" data-page="os-process">
+                        <div class="os-detail-card" data-page="os-fault">
                             <div class="os-detail-header"><h3>/proc Filesystem Interaction</h3></div>
                             <div class="os-detail-body"><p>Reads <code>/proc/[pid]/comm</code>, <code>/proc/[pid]/cmdline</code>, and <code>/proc/[pid]/status</code> for process name, command, state, threads, memory.</p><p><code>/proc</code> is not a normal disk tree—it is the kernel exposing live process and system state as text files.</p><div class="os-tags"><span class="os-tag">/proc/comm</span><span class="os-tag">/proc/cmdline</span><span class="os-tag">/proc/status</span></div></div>
                         </div>
@@ -1350,6 +1353,129 @@ void send_event_to_backend(const std::string&amp; event_type,
                 </section>
             </main>
 
+            <!-- ════════ PAGE: /PROC FILESYSTEM ════════ -->
+            <main id="page-os-procfs" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                            <div class="panel-heading">
+                                <h2>/proc Filesystem Interaction</h2>
+                                <span class="panel-caption">Kernel process metadata reads</span>
+                            </div>
+                            <p class="detail-hint">This standalone concept page focuses on reading <code>/proc/[pid]/comm</code>, <code>/proc/[pid]/cmdline</code>, and <code>/proc/[pid]/status</code> safely and repeatedly.</p>
+                            <div class="detail-section">
+                                <h3>Source Code — process_monitor.cpp</h3>
+                                <pre class="os-process-code-pre" id="os-procfs-code-scroll"><code><span class="code-step-block" data-code-phase="procfs-scan">for (const auto&amp; entry : std::filesystem::directory_iterator("/proc")) {
+    if (!entry.is_directory()) continue;
+    std::string pid = entry.path().filename().string();
+    if (!std::all_of(pid.begin(), pid.end(), ::isdigit)) continue;
+}</span><span class="code-step-block" data-code-phase="procfs-comm">std::ifstream comm_file("/proc/" + pid + "/comm");
+std::getline(comm_file, process_name);</span><span class="code-step-block" data-code-phase="procfs-cmdline">std::ifstream cmd_file("/proc/" + pid + "/cmdline");
+std::getline(cmd_file, command_line);</span><span class="code-step-block" data-code-phase="procfs-status">std::ifstream status_file("/proc/" + pid + "/status");
+while (std::getline(status_file, line)) {
+    // parse Name/State/Threads/VmRSS
+}</span></code></pre>
+                            </div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="/proc read animation">
+                            <div class="res-viz-toolbar" role="group" aria-label="Animation controls">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-procfs" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-procfs">Stop</button>
+                                <span class="res-viz-state" id="viz-state-os-procfs" aria-live="polite">Running</span>
+                            </div>
+                            <h3 class="thread-viz-title">/proc read flow</h3>
+                            <div class="viz-response-rail" id="viz-procfs-rail" data-phase="procfs-scan">
+                                <div class="viz-response-step" data-procfs-phase="procfs-scan"><strong>1</strong><span>Scan PIDs</span></div>
+                                <div class="viz-response-step" data-procfs-phase="procfs-comm"><strong>2</strong><span>Read comm</span></div>
+                                <div class="viz-response-step" data-procfs-phase="procfs-cmdline"><strong>3</strong><span>Read cmdline</span></div>
+                                <div class="viz-response-step" data-procfs-phase="procfs-status"><strong>4</strong><span>Read status</span></div>
+                            </div>
+                            <p class="viz-dynamic-caption" id="viz-procfs-status">Scanning /proc for numeric PID directories...</p>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ════════ PAGE: CONCURRENCY DESIGN ════════ -->
+            <main id="page-os-concurrency" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                            <div class="panel-heading">
+                                <h2>Concurrency &amp; Parallel Design</h2>
+                                <span class="panel-caption">fork + pthread + services</span>
+                            </div>
+                            <p class="detail-hint">This page isolates the architecture-level concurrency model: parent/child process split, 4 worker threads in child, and Python services consuming outputs.</p>
+                            <div class="detail-section">
+                                <h3>Source Code — main.cpp design</h3>
+                                <pre class="os-process-code-pre" id="os-concurrency-code-scroll"><code><span class="code-step-block" data-code-phase="conc-fork">pid_t pid = fork();
+if (pid == 0) run_child_engine();</span><span class="code-step-block" data-code-phase="conc-thread">pthread_create(&amp;monitor_thread, NULL, start_process_monitor, flag_ptr);
+pthread_create(&amp;detector_thread, NULL, start_behavior_detector, flag_ptr);
+pthread_create(&amp;resource_thread, NULL, start_resource_monitor, flag_ptr);
+pthread_create(&amp;response_thread, NULL, start_response_engine, flag_ptr);</span><span class="code-step-block" data-code-phase="conc-join">pthread_join(monitor_thread, NULL);
+pthread_join(detector_thread, NULL);
+pthread_join(resource_thread, NULL);
+pthread_join(response_thread, NULL);</span><span class="code-step-block" data-code-phase="conc-service"># Python services run in parallel terminals
+python3 backend/main_backend.py
+python3 gui_dashboard/app.py</span></code></pre>
+                            </div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="Concurrency animation">
+                            <div class="res-viz-toolbar" role="group" aria-label="Animation controls">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-concurrency" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-concurrency">Stop</button>
+                                <span class="res-viz-state" id="viz-state-os-concurrency" aria-live="polite">Running</span>
+                            </div>
+                            <h3 class="thread-viz-title">Parallel execution map</h3>
+                            <div class="viz-response-rail" id="viz-concurrency-rail" data-phase="conc-fork">
+                                <div class="viz-response-step" data-concurrency-phase="conc-fork"><strong>1</strong><span>fork()</span></div>
+                                <div class="viz-response-step" data-concurrency-phase="conc-thread"><strong>2</strong><span>Spawn threads</span></div>
+                                <div class="viz-response-step" data-concurrency-phase="conc-join"><strong>3</strong><span>Join workers</span></div>
+                                <div class="viz-response-step" data-concurrency-phase="conc-service"><strong>4</strong><span>Service fanout</span></div>
+                            </div>
+                            <p class="viz-dynamic-caption" id="viz-concurrency-status">Parent forks; child prepares worker threads.</p>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ════════ PAGE: FAULT TOLERANCE ════════ -->
+            <main id="page-os-fault" class="page">
+                <section class="panel concept-detail-panel concept-detail-panel--split">
+                    <div class="concept-detail-split">
+                        <div class="concept-detail-main">
+                            <div class="panel-heading">
+                                <h2>Fault Tolerance &amp; Supervision</h2>
+                                <span class="panel-caption">waitpid + restart loop</span>
+                            </div>
+                            <p class="detail-hint">This page shows the supervision pattern separately: parent waits, evaluates child exit state, and restarts on crash paths with backoff.</p>
+                            <div class="detail-section">
+                                <h3>Source Code — parent supervisor loop</h3>
+                                <pre class="os-process-code-pre" id="os-fault-code-scroll"><code><span class="code-step-block" data-code-phase="fault-wait">waitpid(pid, &amp;status, 0);</span><span class="code-step-block" data-code-phase="fault-check">if (WIFEXITED(status) &amp;&amp; WEXITSTATUS(status) == 0) {
+    break; // clean shutdown
+}</span><span class="code-step-block" data-code-phase="fault-restart">sleep(2);
+continue; // restart child after abnormal exit</span><span class="code-step-block" data-code-phase="fault-stable">std::cout &lt;&lt; "[*] Parent supervisor loop stable" &lt;&lt; std::endl;</span></code></pre>
+                            </div>
+                        </div>
+                        <aside class="concept-viz-aside thread-viz-aside" aria-label="Fault tolerance animation">
+                            <div class="res-viz-toolbar" role="group" aria-label="Animation controls">
+                                <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-os-fault" disabled>Start</button>
+                                <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-os-fault">Stop</button>
+                                <span class="res-viz-state" id="viz-state-os-fault" aria-live="polite">Running</span>
+                            </div>
+                            <h3 class="thread-viz-title">Supervisor cycle</h3>
+                            <div class="viz-response-rail" id="viz-fault-rail" data-phase="fault-wait">
+                                <div class="viz-response-step" data-fault-phase="fault-wait"><strong>1</strong><span>waitpid</span></div>
+                                <div class="viz-response-step" data-fault-phase="fault-check"><strong>2</strong><span>Evaluate exit</span></div>
+                                <div class="viz-response-step" data-fault-phase="fault-restart"><strong>3</strong><span>Restart path</span></div>
+                                <div class="viz-response-step" data-fault-phase="fault-stable"><strong>4</strong><span>Stable run</span></div>
+                            </div>
+                            <p class="viz-dynamic-caption" id="viz-fault-status">Parent is blocking in waitpid() while child runs.</p>
+                        </aside>
+                    </div>
+                </section>
+            </main>
+
             <!-- ════════ PAGE: RED TEAM ════════ -->
             <main id="page-red-team" class="page">
                 <section class="panel concept-detail-panel concept-detail-panel--split">
@@ -1539,6 +1665,8 @@ void trigger_response(int pid) {
                             <div class="res-viz-toolbar" role="group" aria-label="Animation controls">
                                 <button type="button" class="res-viz-btn res-viz-btn--start" id="viz-btn-start-response" disabled>Start</button>
                                 <button type="button" class="res-viz-btn res-viz-btn--stop" id="viz-btn-stop-response">Stop</button>
+                                <button type="button" class="res-viz-btn" id="viz-btn-prev-response" disabled>Prev</button>
+                                <button type="button" class="res-viz-btn" id="viz-btn-next-response" disabled>Next</button>
                                 <span class="res-viz-state" id="viz-state-response" aria-live="polite">Running</span>
                             </div>
                             <h3 class="thread-viz-title">Response flow (animated from code)</h3>
