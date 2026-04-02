@@ -2903,13 +2903,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const dashActive = document.getElementById('dash-active-threats');
         const dashResolved = document.getElementById('dash-resolved');
         const dashKills = document.getElementById('dash-kills');
-        const dashVuln = document.getElementById('dash-vuln');
         const dashStatus = document.getElementById('dash-status');
         
         if (dashActive) dashActive.textContent = activeAlerts.length;
         if (dashResolved) dashResolved.textContent = data.resolved_cases || 0;
         if (dashKills) dashKills.textContent = data.kill_cnt || 0;
-        if (dashVuln) dashVuln.textContent = (counts.HIGH || 0) + (counts.CRITICAL || 0);
         if (dashStatus) {
             dashStatus.textContent = data.state || 'NORMAL';
             dashStatus.className = 'ov-badge ' + (data.state === 'NORMAL' ? 'green-bg' : (data.state === 'WARNING' ? 'yellow-bg' : (data.state === 'LOCKED' ? 'red-bg' : 'yellow-bg')));

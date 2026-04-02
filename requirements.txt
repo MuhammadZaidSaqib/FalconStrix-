@@ -7,3 +7,6 @@ mysql-connector-python==8.2.0
 eventlet==0.33.3
 python-dotenv==1.0.0
 reportlab
+
+# Linux/Kali non-Python dependencies (install via apt, not pip):
+#   sudo apt install -y tmux mariadb-server mariadb-client g++ build-essential

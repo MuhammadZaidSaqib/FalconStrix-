@@ -1,5 +1,7 @@
 # FalconStrix
 
+For a complete Kali Linux setup walkthrough, see `SETUP_KALI.md`.
+
 **FalconStrix** is a host-based intrusion detection and response platform that combines:
 
 - a Python backend for event ingestion, persistence, and FSM orchestration,
@@ -57,6 +59,7 @@ High-level flow:
 - **Python**: 3.10+
 - **Database**: MySQL/MariaDB server
 - **Compiler** (Linux/C++ path): `g++` with pthread support
+- **Terminal multiplexer** (Linux quick-start): `tmux`
 
 ---
 
@@ -67,8 +70,9 @@ High-level flow:
 Create your database (example: `hidrs_db`) and import SQL files:
 
 ```bash
-mysql -u root -p hidrs_db < database/queries.sql
+mysql -u root -p < database/schema.sql
 mysql -u root -p hidrs_db < database/sample_data.sql
+mysql -u root -p hidrs_db < database/backfill_incident_trends.sql
 ```
 
 Update DB credentials/environment in backend configuration as needed.
@@ -93,12 +97,36 @@ python -m pip install -r requirements.txt
 
 ```bash
 cd os_engine_cpp
-g++ -pthread src/main.cpp src/process_monitor.cpp src/behavior_detector.cpp src/response_engine.cpp -I include/ -o os_engine
+g++ -pthread src/main.cpp src/process_monitor.cpp src/behavior_detector.cpp src/resource_monitor.cpp src/response_engine.cpp -I include/ -o os_engine
 ```
 
 ---
 
 ## Run FalconStrix
+
+### Linux quick start (recommended)
+
+After first-time setup (DB + venv + dependencies), run everything with one command:
+
+```bash
+chmod +x run_all.sh
+./run_all.sh
+```
+
+Optional (auto-start Red Team pane):
+
+```bash
+./run_all.sh --with-red-team
+```
+
+Attach / stop tmux session:
+
+```bash
+tmux attach -t falconstrix
+tmux kill-session -t falconstrix
+```
+
+---
 
 Use separate terminals:
 
