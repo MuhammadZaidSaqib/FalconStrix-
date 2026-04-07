@@ -7,13 +7,15 @@
     <title>FalconStrix — SOC Dashboard</title>
     <meta name="description" content="Hybrid Behavioral Cybersecurity SOC Command Center with OS-Level Integration">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260401m') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='falconstrix-logo.svg') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
 </head>
 <body class="theme-normal">
     <div id="startup-screen" class="startup-screen">
         <div class="startup-content">
+            <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="FalconStrix logo" class="startup-logo" decoding="async" fetchpriority="high">
             <p class="startup-kicker">Initializing Security Platform</p>
             <h1 class="startup-title" aria-label="FalconStrix">
                 <span>F</span><span>a</span><span>l</span><span>c</span><span>o</span><span>n</span><span>S</span><span>t</span><span>r</span><span>i</span><span>x</span>
@@ -24,7 +26,13 @@
 
     <div class="app-layout dashboard-shell">
         <aside class="sidebar" id="sidebar">
-            <div class="sidebar-brand"><span class="brand-text">FalconStrix</span></div>
+            <div class="sidebar-brand">
+                <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="FalconStrix logo" class="brand-logo brand-logo--sidebar" loading="lazy" decoding="async">
+                <div class="brand-stack">
+                    <span class="brand-text">FalconStrix</span>
+                    <span class="brand-subtext">Cyber Defense Core</span>
+                </div>
+            </div>
             <nav class="sidebar-nav">
                 <div class="nav-section-label">Monitoring</div>
                 <button class="nav-item active" data-page="dashboard" id="nav-dashboard"><span class="nav-text">Dashboard</span></button>
@@ -64,6 +72,7 @@
             <header>
                 <div class="header-left">
                     <button class="menu-btn" id="menu-toggle" title="Toggle Menu">&#9776;</button>
+                    <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="" class="brand-logo brand-logo--header" aria-hidden="true" loading="lazy" decoding="async">
                     <h1 class="page-title" id="page-title">FalconStrix</h1>
                 </div>
                 <div class="header-status">

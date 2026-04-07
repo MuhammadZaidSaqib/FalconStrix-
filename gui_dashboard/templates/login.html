@@ -6,12 +6,16 @@
     <script>if ('scrollRestoration' in history) history.scrollRestoration = 'manual';</script>
     <title>Sign in - FalconStrix</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='falconstrix-logo.svg') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body class="theme-normal login-body">
     <div class="login-shell">
         <div class="login-grid">
             <section class="login-intel-panel" aria-label="Threat intelligence overview">
+                <div class="hero-logo-badge">
+                    <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="FalconStrix logo" class="brand-logo brand-logo--hero">
+                </div>
                 <div class="login-kicker">Secure Access Layer</div>
                 <h1 class="login-hero-title">FalconStrix<br>Cyber Defense Gateway</h1>
                 <p class="login-hero-copy">Enter through a live defense perimeter built like an operator console, with threat telemetry, lockout awareness, and a strong cyber-security visual identity.</p>
@@ -20,6 +24,7 @@
                     <div class="scanframe-grid"></div>
                     <div class="scanframe-ring scanframe-ring-a"></div>
                     <div class="scanframe-ring scanframe-ring-b"></div>
+                    <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="" class="scanframe-logo" aria-hidden="true">
                     <div class="scanframe-core">
                         <span class="scanframe-core-label">Threat Mesh</span>
                         <strong>ARMED</strong>
@@ -53,7 +58,10 @@
             <section class="login-card">
                 <div class="login-brand">
                     <div class="login-badge">Operator Access</div>
-                    <span class="brand-text">FalconStrix</span>
+                    <div class="login-brand-row">
+                        <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="FalconStrix logo" class="brand-logo brand-logo--auth">
+                        <span class="brand-text">FalconStrix</span>
+                    </div>
                     <p class="login-tagline">SOC Command Center</p>
                 </div>
                 {% with messages = get_flashed_messages(with_categories=true) %}

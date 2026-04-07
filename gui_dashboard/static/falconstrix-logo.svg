@@ -1,0 +1,101 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="coreGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(256 256) rotate(90) scale(206)">
+      <stop stop-color="#17384A" stop-opacity="0.78"/>
+      <stop offset="0.6" stop-color="#0C1A24" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#04080D" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="lineGlow" x1="97" y1="134" x2="415" y2="378" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8FBFF"/>
+      <stop offset="0.5" stop-color="#9FEAFF"/>
+      <stop offset="1" stop-color="#FDE6E6"/>
+    </linearGradient>
+    <linearGradient id="accentGlow" x1="256" y1="108" x2="256" y2="413" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7AE3FF"/>
+      <stop offset="1" stop-color="#F3F8FF"/>
+    </linearGradient>
+    <filter id="softGlow" x="37" y="58" width="438" height="396" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="8" result="effect1_foregroundBlur"/>
+    </filter>
+    <filter id="sparkGlow" x="0" y="0" width="512" height="512" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="3" result="effect1_foregroundBlur"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="96" fill="#070C12"/>
+  <rect x="18" y="18" width="476" height="476" rx="78" stroke="#97E4FF" stroke-opacity="0.22"/>
+  <circle cx="256" cy="256" r="206" fill="url(#coreGlow)"/>
+  <circle cx="256" cy="256" r="145" stroke="#173243" stroke-opacity="0.55" stroke-width="2"/>
+  <circle cx="256" cy="256" r="117" stroke="#264F65" stroke-opacity="0.52" stroke-width="2"/>
+  <circle cx="256" cy="256" r="90" stroke="#355D74" stroke-opacity="0.4" stroke-width="1.5"/>
+
+  <g stroke="#5A7689" stroke-opacity="0.48" stroke-width="2" stroke-linecap="round">
+    <path d="M256 33V97"/>
+    <path d="M213 41V103"/>
+    <path d="M299 41V103"/>
+    <path d="M171 55V118"/>
+    <path d="M341 55V118"/>
+    <path d="M129 82V143"/>
+    <path d="M383 82V143"/>
+    <path d="M54 150H118"/>
+    <path d="M394 150H458"/>
+    <path d="M38 213H101"/>
+    <path d="M411 213H474"/>
+    <path d="M38 299H101"/>
+    <path d="M411 299H474"/>
+    <path d="M54 362H118"/>
+    <path d="M394 362H458"/>
+    <path d="M129 369V430"/>
+    <path d="M383 369V430"/>
+  </g>
+
+  <g stroke="#51697B" stroke-opacity="0.5" stroke-width="1.5" stroke-linecap="round">
+    <path d="M82 120H122V152"/>
+    <path d="M430 120H390V152"/>
+    <path d="M71 182H131V207"/>
+    <path d="M441 182H381V207"/>
+    <path d="M74 330H134V305"/>
+    <path d="M438 330H378V305"/>
+    <path d="M101 389H141V357"/>
+    <path d="M411 389H371V357"/>
+  </g>
+
+  <g filter="url(#softGlow)" stroke="url(#lineGlow)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M256 157L238 183L226 226L220 273L228 320L244 357L256 383L268 357L284 320L292 273L286 226L274 183L256 157Z"/>
+    <path d="M238 183L256 172L274 183"/>
+    <path d="M226 226L256 212L286 226"/>
+    <path d="M220 273L256 256L292 273"/>
+    <path d="M228 320L256 307L284 320"/>
+    <path d="M176 250L132 225L97 197"/>
+    <path d="M182 269L141 254L103 245"/>
+    <path d="M191 287L150 282L115 284"/>
+    <path d="M201 304L166 311L134 324"/>
+    <path d="M214 323L181 339L155 357"/>
+    <path d="M225 341L199 367L178 392"/>
+    <path d="M236 354L217 388L204 413"/>
+    <path d="M336 250L380 225L415 197"/>
+    <path d="M330 269L371 254L409 245"/>
+    <path d="M321 287L362 282L397 284"/>
+    <path d="M311 304L346 311L378 324"/>
+    <path d="M298 323L331 339L357 357"/>
+    <path d="M287 341L313 367L334 392"/>
+    <path d="M276 354L295 388L308 413"/>
+    <path d="M206 250L172 220L145 190"/>
+    <path d="M220 234L188 200L162 168"/>
+    <path d="M306 250L340 220L367 190"/>
+    <path d="M292 234L324 200L350 168"/>
+  </g>
+
+  <g fill="#FF7F7F" filter="url(#sparkGlow)">
+    <circle cx="117" cy="189" r="4"/>
+    <circle cx="395" cy="189" r="4"/>
+    <circle cx="94" cy="245" r="3"/>
+    <circle cx="418" cy="245" r="3"/>
+  </g>
+
+  <path d="M256 146C267 148 275 152 281 159C277 163 273 170 270 178H242C239 170 235 163 231 159C237 152 245 148 256 146Z" fill="url(#accentGlow)"/>
+</svg>

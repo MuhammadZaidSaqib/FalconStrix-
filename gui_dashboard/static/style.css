@@ -29,6 +29,7 @@
 html {
     background-color: #050505;
     color-scheme: dark;
+    scroll-behavior: smooth;
 }
 
 body {
@@ -36,9 +37,9 @@ body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background-color: #050505;
     background:
-        radial-gradient(circle at top left, rgba(255, 76, 76, 0.18), transparent 28%),
-        radial-gradient(circle at top right, rgba(124, 10, 10, 0.2), transparent 34%),
-        linear-gradient(180deg, #050505 0%, #0a0404 45%, #120707 100%);
+        radial-gradient(circle at top left, rgba(66, 153, 225, 0.14), transparent 30%),
+        radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 36%),
+        linear-gradient(180deg, #050505 0%, #070b10 45%, #0b1016 100%);
     color: var(--text-color);
     transition: background-color 0.5s ease;
     overflow: hidden;
@@ -70,6 +71,13 @@ body.dashboard-ready { overflow: auto; }
     pointer-events: none;
 }
 .startup-content { text-align: center; padding: 24px; }
+.startup-logo {
+    width: clamp(96px, 12vw, 144px);
+    height: auto;
+    margin: 0 auto 18px;
+    display: block;
+    filter: drop-shadow(0 0 28px rgba(122, 227, 255, 0.22));
+}
 .startup-kicker {
     margin: 0 0 18px; letter-spacing: 0.45em; text-transform: uppercase;
     color: rgba(201, 209, 217, 0.72); font-size: 0.8rem;
@@ -106,9 +114,9 @@ body.dashboard-ready { overflow: auto; }
     display: flex;
     min-height: 100vh;
     background:
-        radial-gradient(circle at top left, rgba(255, 77, 87, 0.18), transparent 24%),
-        radial-gradient(circle at 80% 15%, rgba(125, 9, 9, 0.22), transparent 22%),
-        linear-gradient(180deg, #050505 0%, #100404 100%);
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 24%),
+        radial-gradient(circle at 80% 15%, rgba(59, 130, 246, 0.1), transparent 24%),
+        linear-gradient(180deg, #050505 0%, #0a0f16 100%);
 }
 .dashboard-shell {
     opacity: 0; transform: translateY(36px) scale(0.985); filter: blur(10px);
@@ -123,8 +131,8 @@ body.dashboard-ready .dashboard-shell {
 .sidebar {
     width: var(--sidebar-width); min-height: 100vh;
     background:
-        linear-gradient(180deg, rgba(255, 77, 87, 0.12), transparent 22%),
-        linear-gradient(180deg, #120404 0%, #1a0606 100%);
+        linear-gradient(180deg, rgba(56, 189, 248, 0.1), transparent 24%),
+        linear-gradient(180deg, #0c1016 0%, #0f1620 100%);
     border-right: 1px solid var(--border-color);
     display: flex; flex-direction: column;
     position: fixed; left: 0; top: 0; bottom: 0;
@@ -178,6 +186,7 @@ body.dashboard-ready .dashboard-shell {
     background-color: #080303;
     background: linear-gradient(180deg, rgba(5, 5, 5, 0.99) 0%, rgba(12, 4, 4, 0.99) 50%, rgba(8, 2, 2, 0.99) 100%);
     min-height: 100%;
+    scroll-behavior: smooth;
 }
 .sidebar.pinned ~ .main-content {
     margin-left: 0;
@@ -208,9 +217,30 @@ body.dashboard-ready .dashboard-shell {
     padding: 20px 20px 16px;
     border-bottom: 1px solid var(--border-color);
 }
+.brand-stack {
+    display: grid;
+    gap: 3px;
+}
+.brand-subtext {
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #93b8c9;
+}
 .brand-text {
     font-size: 1.15rem; font-weight: 800; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--text-bright);
+}
+.brand-logo {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+.brand-logo--sidebar {
+    width: 54px;
+    flex: 0 0 54px;
+    filter: drop-shadow(0 0 16px rgba(122, 227, 255, 0.2));
 }
 
 .sidebar-nav { flex: 1; padding: 12px 10px; }
@@ -300,6 +330,11 @@ header {
     padding-bottom: 16px; margin-bottom: 24px;
 }
 .header-left { display: flex; align-items: center; gap: 14px; }
+.brand-logo--header {
+    width: 44px;
+    flex: 0 0 44px;
+    filter: drop-shadow(0 0 12px rgba(122, 227, 255, 0.2));
+}
 .menu-btn {
     background: var(--panel-bg); border: 1px solid var(--border-color);
     color: var(--text-color); width: 40px; height: 40px;
@@ -3226,6 +3261,19 @@ header {
     justify-content: space-between;
     min-height: 680px;
 }
+.hero-logo-badge {
+    width: 112px;
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 24px;
+    border: 1px solid rgba(122, 227, 255, 0.2);
+    background: radial-gradient(circle at center, rgba(122, 227, 255, 0.14), rgba(255, 255, 255, 0.02));
+    box-shadow: 0 18px 34px rgba(0, 0, 0, 0.3);
+}
+.brand-logo--hero {
+    width: 100%;
+    filter: drop-shadow(0 0 20px rgba(122, 227, 255, 0.2));
+}
 .login-kicker {
     display: inline-flex;
     align-self: flex-start;
@@ -3265,6 +3313,15 @@ header {
         radial-gradient(circle at center, rgba(255, 77, 87, 0.07), transparent 52%),
         linear-gradient(180deg, rgba(9, 2, 2, 0.92), rgba(19, 5, 5, 0.92));
     overflow: hidden;
+}
+.scanframe-logo {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: 214px;
+    height: auto;
+    transform: translate(-50%, -50%);
+    opacity: 0.58;
+    filter: drop-shadow(0 0 26px rgba(122, 227, 255, 0.18));
 }
 .scanframe-grid {
     position: absolute;
@@ -3408,6 +3465,16 @@ header {
     text-align: left;
     margin-bottom: 24px;
 }
+.login-brand-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.brand-logo--auth {
+    width: 62px;
+    flex: 0 0 62px;
+    filter: drop-shadow(0 0 18px rgba(122, 227, 255, 0.18));
+}
 .login-badge {
     display: inline-flex;
     margin-bottom: 16px;
@@ -3505,6 +3572,27 @@ header {
     }
     .login-metrics {
         grid-template-columns: 1fr;
+    }
+    .hero-logo-badge {
+        width: 92px;
+    }
+    .scanframe-logo {
+        width: 176px;
+    }
+    .login-brand-row {
+        gap: 12px;
+    }
+    .brand-logo--auth {
+        width: 52px;
+        flex-basis: 52px;
+    }
+    .brand-logo--header {
+        width: 38px;
+        flex-basis: 38px;
+    }
+    .brand-logo--sidebar {
+        width: 48px;
+        flex-basis: 48px;
     }
 }
 

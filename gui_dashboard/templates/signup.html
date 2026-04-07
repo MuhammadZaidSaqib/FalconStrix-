@@ -6,12 +6,16 @@
     <script>if ('scrollRestoration' in history) history.scrollRestoration = 'manual';</script>
     <title>Create account - FalconStrix</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='falconstrix-logo.svg') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body class="theme-normal login-body">
     <div class="login-shell">
         <div class="login-grid">
             <section class="login-intel-panel" aria-label="Account registration">
+                <div class="hero-logo-badge">
+                    <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="FalconStrix logo" class="brand-logo brand-logo--hero">
+                </div>
                 <div class="login-kicker">Onboarding</div>
                 <h1 class="login-hero-title">FalconStrix<br>Operator accounts</h1>
                 <p class="login-hero-copy">Create a dashboard login tied to SOC activity. Sign-ins, sign-outs, and registration appear in <strong>User Activity</strong> with your username.</p>
@@ -32,7 +36,10 @@
             <section class="login-card">
                 <div class="login-brand">
                     <div class="login-badge">New operator</div>
-                    <span class="brand-text">FalconStrix</span>
+                    <div class="login-brand-row">
+                        <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="FalconStrix logo" class="brand-logo brand-logo--auth">
+                        <span class="brand-text">FalconStrix</span>
+                    </div>
                     <p class="login-tagline">Create your account</p>
                 </div>
                 {% with messages = get_flashed_messages(with_categories=true) %}
