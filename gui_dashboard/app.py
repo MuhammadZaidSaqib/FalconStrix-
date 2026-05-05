@@ -1249,7 +1249,8 @@ def background_thread():
                     },
                 )
         except Exception as e: print(f"BG Thread Error: {e}")
-        socketio.sleep(2)
+        # Slightly slower loop reduces UI churn under heavy event load.
+        socketio.sleep(3)
 
 @socketio.on('request_scan')
 def handle_scan():
@@ -1678,6 +1679,66 @@ def api_resolve_alert_case(alert_id):
         last_dashboard_snapshot = snap
         socketio.emit('dashboard_snapshot', snap)
         return jsonify({'ok': True, 'result': result, 'snapshot': snap}), 200
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/alerts/manual', methods=['POST'])
+def api_create_manual_alert():
+    """
+    Create a dashboard-triggered alert so operators can simulate/raise a real case.
+    Persists Event + Alert in DB, then pushes a fresh dashboard snapshot.
+    """
+    actor = session.get('username') or 'unknown'
+    actor_uid = session.get('user_id')
+    payload = request.get_json(silent=True) or {}
+
+    # Supported values align with alert_service.create_alert severity mapping.
+    sev_map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 4}
+    severity_name = str(payload.get('severity') or 'HIGH').strip().upper()
+    severity_id = sev_map.get(severity_name)
+    if severity_id is None:
+        return jsonify({'ok': False, 'error': 'Invalid severity. Use LOW|MEDIUM|HIGH|CRITICAL'}), 400
+
+    message = str(payload.get('message') or '').strip()
+    if not message:
+        message = f"Manual alert raised by '{actor}' from dashboard"
+    message = message[:240]
+
+    try:
+        from event_service import log_event
+        from alert_service import create_alert
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'alert services unavailable: {e}'}), 500
+
+    try:
+        event_id = log_event(
+            "MANUAL_ALERT",
+            message,
+            "SOC-Dashboard",
+            user_id=actor_uid,
+        )
+        if not event_id:
+            return jsonify({'ok': False, 'error': 'Failed to create event record'}), 500
+
+        alert_id = create_alert(event_id, severity_id, message)
+        if not alert_id:
+            return jsonify({'ok': False, 'error': 'Failed to create alert record'}), 500
+
+        record_user_activity_event(
+            "MANUAL_ALERT",
+            f"User '{actor}' created manual {severity_name} alert: {message}",
+            user_id=actor_uid,
+            actor_username=actor,
+        )
+
+        st = get_effective_fsm_state()
+        snap = build_dashboard_snapshot(st)
+        global last_dashboard_snapshot
+        last_dashboard_snapshot = snap
+        socketio.emit('dashboard_snapshot', snap)
+
+        return jsonify({'ok': True, 'alert_id': alert_id, 'snapshot': snap}), 200
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

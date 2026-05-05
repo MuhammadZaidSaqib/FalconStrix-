@@ -2587,6 +2587,29 @@ header {
 .mini-export-btn:hover {
     background: rgba(0, 195, 255, 0.24);
 }
+
+/* Manual alert severity select needs explicit option colors for readability */
+#manual-alert-severity {
+    min-width: 122px;
+    background: rgba(7, 29, 45, 0.96);
+    color: #e8f7ff;
+    border: 1px solid rgba(0, 195, 255, 0.5);
+}
+
+#manual-alert-severity:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 195, 255, 0.28);
+}
+
+#manual-alert-severity option {
+    background-color: #0c2431;
+    color: #f4fbff;
+}
+
+#manual-alert-severity option:checked {
+    background-color: #114760;
+    color: #ffffff;
+}
 .icon-btn {
     background: transparent; border: none; color: var(--muted-text); cursor: pointer;
     font-size: 1rem; padding: 4px; border-radius: 4px;

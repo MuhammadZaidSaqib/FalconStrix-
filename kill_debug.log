@@ -12,3 +12,5 @@
 2026-03-31 12:54:39 - Kill REQ: System Idle Process (0)
 2026-04-06 22:08:50 - Kill REQ: opera.exe (10432)
 2026-04-06 22:09:08 - Kill REQ: opera.exe (14608)
+2026-05-05 12:58:24 - Kill REQ: mongod.exe (7492)
+2026-05-05 12:58:34 - Kill REQ: mysqld.exe (4416)

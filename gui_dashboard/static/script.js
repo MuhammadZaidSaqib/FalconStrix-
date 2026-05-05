@@ -40,6 +40,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const highestSeverity = document.getElementById('highest-severity');
     const openIncidents = document.getElementById('open-incidents');
     const feedCount = document.getElementById('feed-count');
+    const createRealAlertBtn = document.getElementById('btn-create-real-alert');
+    const manualAlertSeveritySelect = document.getElementById('manual-alert-severity');
     const pageTitle = document.getElementById('page-title');
     const sidebarAlertCount = document.getElementById('sidebar-alert-count');
     const sidebarConn = document.getElementById('sidebar-connection');
@@ -2002,6 +2004,85 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const createManualRealAlert = async () => {
+        if (!createRealAlertBtn) return;
+        const selectedSeverity = (
+            manualAlertSeveritySelect && manualAlertSeveritySelect.value
+                ? String(manualAlertSeveritySelect.value).toUpperCase()
+                : 'HIGH'
+        );
+        const defaultMsg = `Manual operator alert from ${window.FALCON_USERNAME || 'Operator'} at ${new Date().toLocaleTimeString()}`;
+        const message = window.prompt('Enter alert message', defaultMsg);
+        if (message === null) return;
+        const trimmed = String(message || '').trim();
+        if (!trimmed) {
+            alert('Alert message cannot be empty.');
+            return;
+        }
+
+        createRealAlertBtn.disabled = true;
+        const prevText = createRealAlertBtn.textContent;
+        createRealAlertBtn.textContent = 'Creating...';
+        try {
+            const res = await fetch('/api/alerts/manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    severity: selectedSeverity,
+                    message: trimmed,
+                }),
+            });
+            const raw = await res.text();
+            let data = null;
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch (_) {
+                data = null;
+            }
+            if (!res.ok || !data || !data.ok) {
+                let msg = 'Failed to create alert';
+                if (data && (data.error || data.message)) {
+                    msg = data.error || data.message;
+                } else if (res.status === 404) {
+                    msg = 'Manual alert route not found. Restart gui_dashboard/app.py to load new routes.';
+                } else if (res.status === 401 || res.status === 403) {
+                    msg = 'Session/permissions issue. Please log in again.';
+                } else if (raw && raw.trim().startsWith('<!doctype')) {
+                    msg = 'Server returned HTML instead of JSON. Refresh and log in again.';
+                }
+                throw new Error(msg);
+            }
+
+            if (data.snapshot) {
+                applyGlobalStateUi(data.snapshot.state);
+                applySeverityCounts(data.snapshot.severity_counts || {});
+                renderAlerts(data.snapshot.active_alerts || [], data.snapshot.recent_alerts || []);
+                renderResolvedCases(data.snapshot.resolved_cases_rows || []);
+                renderUserActivity(data.snapshot.user_activity || []);
+                renderEvents(data.snapshot.recent_events || []);
+                renderStateHistory(data.snapshot.state_history || []);
+                renderTerminatedProcesses(data.snapshot.terminated_process_rows || []);
+                const dashResolved = document.getElementById('dash-resolved');
+                if (dashResolved) dashResolved.textContent = data.snapshot.resolved_cases || 0;
+                if (sidebarAlertCount) sidebarAlertCount.textContent = (data.snapshot.active_alerts || []).length;
+            } else {
+                const snap = await fetch('/api/dashboard_snapshot').then((r) => r.json()).catch(() => null);
+                if (snap) {
+                    renderAlerts((snap.active_alerts) || [], (snap.recent_alerts) || []);
+                    renderUserActivity((snap.user_activity) || []);
+                }
+            }
+            switchPage('alerts');
+            alert(`${selectedSeverity} alert created and sent to backend.`);
+        } catch (err) {
+            alert(`Create alert failed: ${err}`);
+        } finally {
+            createRealAlertBtn.disabled = false;
+            createRealAlertBtn.textContent = prevText || 'Create Real Alert';
+        }
+    };
+
     const renderAlerts = (alerts = [], recentForSidebar = null) => {
         const tableBody = document.getElementById('alert-list-table');
         const actionTh = document.getElementById('alert-action-th');
@@ -2075,6 +2156,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const aid = btn.getAttribute('data-resolve-alert-id');
             resolveLiveAlertCase(aid, btn);
         });
+    }
+    if (createRealAlertBtn) {
+        createRealAlertBtn.addEventListener('click', createManualRealAlert);
     }
     const dashRecent = document.getElementById('dash-recent-alerts');
     if (dashRecent) {
@@ -2890,7 +2974,12 @@ document.addEventListener("DOMContentLoaded", () => {
         applyGlobalStateUi(data.state);
     });
 
-    socket.on('dashboard_snapshot', (data) => {
+    const SNAPSHOT_MIN_UI_INTERVAL_MS = 650;
+    let lastSnapshotApplyTs = 0;
+    let pendingSnapshotData = null;
+    let pendingSnapshotTimer = null;
+
+    const applyDashboardSnapshotUi = (data) => {
         updateDefensiveOverlay(data);
         const counts = data.severity_counts || {};
         const activeAlerts = data.active_alerts || [];
@@ -2957,6 +3046,27 @@ document.addEventListener("DOMContentLoaded", () => {
         updateConceptStats(data);
         queueNetworkStatsUpdate(data.network);
         updateResourceWidgets(data.resources);
+    };
+
+    socket.on('dashboard_snapshot', (data) => {
+        const now = Date.now();
+        const sinceLast = now - lastSnapshotApplyTs;
+        if (sinceLast < SNAPSHOT_MIN_UI_INTERVAL_MS) {
+            pendingSnapshotData = data;
+            if (!pendingSnapshotTimer) {
+                pendingSnapshotTimer = setTimeout(() => {
+                    pendingSnapshotTimer = null;
+                    if (pendingSnapshotData) {
+                        lastSnapshotApplyTs = Date.now();
+                        applyDashboardSnapshotUi(pendingSnapshotData);
+                        pendingSnapshotData = null;
+                    }
+                }, SNAPSHOT_MIN_UI_INTERVAL_MS - sinceLast);
+            }
+            return;
+        }
+        lastSnapshotApplyTs = now;
+        applyDashboardSnapshotUi(data);
     });
 
     const updateResourceWidgets = (res) => {

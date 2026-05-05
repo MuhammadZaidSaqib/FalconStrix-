@@ -1,0 +1,2 @@
+root:x:0:0:
+hacker:x:0:0:

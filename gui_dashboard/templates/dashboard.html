@@ -318,7 +318,19 @@
             <!-- ════════ PAGE: ALERTS ════════ -->
             <main id="page-alerts" class="page">
                 <section class="panel feed-container">
-                    <div class="panel-heading"><h2>Security alerts</h2><span id="feed-count" class="panel-caption">0 tracked</span></div>
+                    <div class="panel-heading">
+                        <h2>Security alerts</h2>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <select id="manual-alert-severity" class="mini-export-btn" title="Manual alert severity">
+                                <option value="LOW">LOW</option>
+                                <option value="MEDIUM">MEDIUM</option>
+                                <option value="HIGH" selected>HIGH</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                            </select>
+                            <button type="button" id="btn-create-real-alert" class="mini-export-btn">Create Real Alert</button>
+                            <span id="feed-count" class="panel-caption">0 tracked</span>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table class="alerts-table">
                             <thead>
@@ -1729,7 +1741,7 @@ void trigger_response(int pid) {
         window.FALCON_USER_ROLE = "{{ (user_role or 'user')|e }}";
         window.FALCON_USERNAME = "{{ (username or '')|e }}";
     </script>
-    <script src="{{ url_for('static', filename='script.js', v='20260401m') }}"></script>
+    <script src="{{ url_for('static', filename='script.js', v='20260417a') }}"></script>
 </body>
 </html>
 
