@@ -1,0 +1,195 @@
+{% extends "base_marketing.html" %}
+
+{% block content %}
+<header class="hero">
+    <div class="hero-bg-glow"></div>
+    <h1>The Ultimate Linux Host Intrusion Detection Engine</h1>
+    <p>FalconStrix provides real-time, low-level process monitoring and automated threat response through a high-performance C++ engine and an intelligent Python backend.</p>
+    <div class="hero-cta">
+        <button class="btn-primary" onclick="window.Clerk ? window.Clerk.openSignUp() : window.location.href='{{ url_for('signup') }}'">Start Free Trial</button>
+        <a href="{{ url_for('demo') }}" class="btn-outline">View Demo</a>
+    </div>
+</header>
+
+<section id="problem" class="section">
+    <div class="section-title">The Linux Security Gap</div>
+    <p class="section-subtitle">Why traditional monitoring fails against modern, fileless adversaries and living-off-the-land techniques.</p>
+    
+    <div class="grid-2">
+        <div class="glass-card">
+            <h3 style="color: var(--danger-accent);">The Problem</h3>
+            <p>Modern Linux infrastructure faces a barrage of sophisticated threats that traditional tools cannot handle effectively. Legacy approaches rely on:</p>
+            <ul style="margin-left: 1.5rem; margin-top: 1rem; color: var(--text-muted); line-height: 1.8;">
+                <li><strong>Native Logging (auditd):</strong> Generates massive amounts of noisy data, making real-time correlation nearly impossible for analysts.</li>
+                <li><strong>User-space Polling:</strong> Inherently slow, allowing rapid attacks (like ransomware encryption) to complete before detection.</li>
+                <li><strong>Kernel Modules & eBPF:</strong> Can be highly complex to deploy and maintain across different kernel versions, posing stability risks.</li>
+            </ul>
+            <p style="margin-top: 1rem;">Adversaries exploit these gaps by loading payloads directly into memory or hijacking legitimate administrative binaries (like Python, Bash, or Perl), effectively blending into normal operations.</p>
+        </div>
+        <div class="glass-card solution-card">
+            <h3 style="color: var(--primary-accent);">The FalconStrix Solution</h3>
+            <p>FalconStrix bridges the gap with a hybrid architecture designed for speed, stability, and intelligent autonomy:</p>
+            <ul style="margin-left: 1.5rem; margin-top: 1rem; color: var(--text-muted); line-height: 1.8;">
+                <li><strong>C++ OS Engine:</strong> Provides microsecond-level visibility into process creation, resource usage, and tree hierarchy—without requiring kernel modifications.</li>
+                <li><strong>Stateful Threat Analysis:</strong> A Python Finite State Machine (FSM) continuously ingests telemetry via fast IPC, tracking threat levels contextually.</li>
+                <li><strong>Automated Mitigation:</strong> When critical behavioral thresholds are breached, the FSM escalates and issues immediate <code>SIGKILL</code> commands to neutralize rogue processes.</li>
+            </ul>
+            <p style="margin-top: 1rem;">All of this telemetry is pushed instantly to a WebSocket-powered SOC dashboard, delivering real-time forensic context to your security team.</p>
+        </div>
+    </div>
+</section>
+
+<section id="analysis" class="section">
+    <div class="section-title">Deep Process Analysis & Cyber Security</div>
+    <p class="section-subtitle">FalconStrix empowers SOC analysts with unparalleled visibility, automated threat mitigation, and an advanced operational skill-set.</p>
+    
+    <div class="grid-2">
+        <div class="glass-card">
+            <div style="font-size: 2.5rem; margin-bottom: 1rem;">🔍</div>
+            <h3 style="color: var(--text-main);">Process Analysis</h3>
+            <p>Our C++ engine continuously monitors the <code>/proc</code> filesystem, tracking process trees, resource utilization spikes, and suspicious parent-child relationships. It instantly detects anomalous behaviors such as excessive CPU spikes indicative of crypto-mining or ransomware encryption.</p>
+        </div>
+        <div class="glass-card">
+            <div style="font-size: 2.5rem; margin-bottom: 1rem;">🛡️</div>
+            <h3 style="color: var(--text-main);">Automated Defense</h3>
+            <p>Using a Finite State Machine (FSM), FalconStrix correlates telemetry in real-time. If threat thresholds are breached, the system automatically escalates from NORMAL to LOCKED state, delivering precise <code>SIGKILL</code> signals to neutralize rogue processes before data is compromised.</p>
+        </div>
+        <div class="glass-card">
+            <div style="font-size: 2.5rem; margin-bottom: 1rem;">⚡</div>
+            <h3 style="color: var(--text-main);">Real-time Telemetry</h3>
+            <p>A low-latency Inter-Process Communication (IPC) pipeline bridges the OS-level C++ engine with the Python logic layer. This guarantees sub-millisecond event ingestion, ensuring your SOC dashboard reflects the exact state of your endpoints instantly.</p>
+        </div>
+        <div class="glass-card">
+            <div style="font-size: 2.5rem; margin-bottom: 1rem;">🎯</div>
+            <h3 style="color: var(--text-main);">SOC Operator Skills</h3>
+            <p>FalconStrix acts as a force multiplier for your security team. By automating the grunt work of process triage and isolation, analysts can focus their skills on high-level forensic investigations, advanced threat hunting, and refining custom behavioral rulesets.</p>
+        </div>
+    </div>
+</section>
+
+<section id="tech" style="background: rgba(17,17,17,0.4); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); padding: 6rem 0;">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 0 5%;">
+        <div class="section-title">Powered by Modern Technology</div>
+        <p class="section-subtitle">A multi-process architecture engineered for maximum reliability.</p>
+    </div>
+
+    <div class="marquee-container">
+        <div class="marquee-content">
+            <span class="marquee-item">C++17 Engine</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Python 3 FSM</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">MariaDB Storage</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Flask & WebSockets</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">IPC Telemetry</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">SIGKILL Defense</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Syscall Monitoring</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Clerk Authentication</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Zero-Trust Architecture</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Threat Hunting</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Incident Forensics</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Real-Time Dashboards</span> <span class="marquee-star">✦</span>
+            <!-- Duplicate for infinite scroll -->
+            <span class="marquee-item">C++17 Engine</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Python 3 FSM</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">MariaDB Storage</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Flask & WebSockets</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">IPC Telemetry</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">SIGKILL Defense</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Syscall Monitoring</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Clerk Authentication</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Zero-Trust Architecture</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Threat Hunting</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Incident Forensics</span> <span class="marquee-star">✦</span>
+            <span class="marquee-item">Real-Time Dashboards</span> <span class="marquee-star">✦</span>
+        </div>
+    </div>
+    
+    <div class="tech-grid" style="max-width: 1200px; margin: 0 auto; padding: 0 5%;">
+        <div class="tech-item">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem; color: var(--primary-accent);">⚙️</div>
+            C++17 Engine
+            <div class="tech-details">
+                <strong>Where:</strong> Low-level OS monitoring
+                <strong>How:</strong> Native process polling & signal handling. Ensures high-speed detection without heavy kernel modules.
+            </div>
+        </div>
+        <div class="tech-item">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem; color: #3b82f6;">🐍</div>
+            Python 3 FSM
+            <div class="tech-details">
+                <strong>Where:</strong> Core backend logic
+                <strong>How:</strong> Evaluates events through a Finite State Machine. Coordinates alerts and defense actions autonomously.
+            </div>
+        </div>
+        <div class="tech-item">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem; color: #ef4444;">🗄️</div>
+            MariaDB Storage
+            <div class="tech-details">
+                <strong>Where:</strong> Persistent database
+                <strong>How:</strong> Stores FSM state history, real-time alerts, process logs, and user activity for the SOC dashboard.
+            </div>
+        </div>
+        <div class="tech-item">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem; color: #22c55e;">🌐</div>
+            Flask & WebSockets
+            <div class="tech-details">
+                <strong>Where:</strong> Web Dashboard UI
+                <strong>How:</strong> Flask serves the interface while Socket.IO pushes live process metrics and security alerts instantly.
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="pricing" class="section">
+    <div class="section-title">Simple, Transparent Pricing</div>
+    <p class="section-subtitle">Deploy FalconStrix on your infrastructure today.</p>
+    
+    <div class="pricing-grid">
+        <div class="pricing-card">
+            <h3>Open Source</h3>
+            <div class="pricing-price">$0</div>
+            <p style="color: var(--text-muted)">Perfect for homelabs and testing.</p>
+            <ul class="pricing-features">
+                <li>Core C++ Engine</li>
+                <li>Community Ruleset</li>
+                <li>Standard FSM Logic</li>
+                <li>Local Dashboard</li>
+            </ul>
+            <button class="btn-outline">Clone on GitHub</button>
+        </div>
+        
+        <div class="pricing-card popular">
+            <div class="popular-badge">Most Popular</div>
+            <h3>Pro</h3>
+            <div class="pricing-price">$49<span style="font-size: 1rem; color: var(--text-muted)">/mo</span></div>
+            <p style="color: var(--text-muted)">For production server clusters.</p>
+            <ul class="pricing-features">
+                <li>Everything in Open Source</li>
+                <li>Advanced Anomaly Detection</li>
+                <li>Clerk SSO Integration</li>
+                <li>Email Alerts</li>
+                <li>Priority Support</li>
+            </ul>
+            <button class="btn-primary" onclick="window.Clerk ? window.Clerk.openSignUp() : window.location.href='{{ url_for('signup') }}'">Start Free Trial</button>
+        </div>
+
+        <div class="pricing-card">
+            <h3>Enterprise</h3>
+            <div class="pricing-price">Custom</div>
+            <p style="color: var(--text-muted)">For massive deployments & SIEM.</p>
+            <ul class="pricing-features">
+                <li>Unlimited Agents</li>
+                <li>Custom FSM State Logic</li>
+                <li>Dedicated Account Manager</li>
+                <li>On-premise API Gateway</li>
+            </ul>
+            <button class="btn-outline">Contact Sales</button>
+        </div>
+    </div>
+</section>
+
+<section id="about" class="section" style="text-align: center;">
+    <div class="section-title">About FalconStrix</div>
+    <p class="section-subtitle">Born out of the necessity to protect critical Linux infrastructure against rapidly evolving threats, FalconStrix combines low-level OS visibility with high-level behavioral intelligence.</p>
+    <a href="https://github.com/MuhammadZaidSaqib/FalconStrix-" target="_blank" class="btn-outline">View the Source Code</a>
+</section>
+{% endblock %}
