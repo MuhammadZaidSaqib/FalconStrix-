@@ -1313,7 +1313,7 @@ def require_dashboard_login():
         request.path.startswith('/api/debug')
         or request.path.startswith('/api/auth/')
         or request.path.startswith('/socket.io')
-        or request.endpoint in ('login', 'signup', 'static', 'api_username_availability')
+        or request.endpoint in ('hero', 'demo', 'login', 'signup', 'static', 'api_username_availability')
         or request.path.startswith('/static/')
     ):
         return None
@@ -1326,7 +1326,7 @@ def require_dashboard_login():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if session.get('user_id'):
-        return redirect(url_for('index'))
+        return redirect(url_for('dashboard'))
     if request.method == 'POST':
         username = (request.form.get('username') or '').strip()
         password = request.form.get('password') or ''
@@ -1351,9 +1351,9 @@ def login():
                 actor_username=user['username'],
             )
             _debug_log('login_success', {'username': user.get('username'), 'user_id': user.get('user_id')})
-            nxt = request.args.get('next') or url_for('index')
+            nxt = request.args.get('next') or url_for('dashboard')
             if not nxt.startswith('/') or nxt.startswith('//'):
-                nxt = url_for('index')
+                nxt = url_for('dashboard')
             return redirect(nxt)
         ip = request.remote_addr or 'unknown'
         rec = _bump_login_failure(ip)
@@ -1386,7 +1386,7 @@ def login():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if session.get('user_id'):
-        return redirect(url_for('index'))
+        return redirect(url_for('dashboard'))
     if os.environ.get('FALCON_DISABLE_SIGNUP', '').lower() in ('1', 'true', 'yes'):
         flash('New account registration is disabled.', 'error')
         return redirect(url_for('login'))
@@ -1447,7 +1447,15 @@ def logout():
 
 
 @app.route('/')
-def index():
+def hero():
+    return render_template('hero.html')
+
+@app.route('/demo')
+def demo():
+    return render_template('demo.html')
+
+@app.route('/dashboard')
+def dashboard():
     return render_template(
         'dashboard.html',
         username=session.get('username', 'Operator'),
