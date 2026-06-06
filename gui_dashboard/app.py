@@ -49,7 +49,7 @@ try:
     from alert_service import get_active_alerts, get_recent_alerts_for_dashboard
     from event_service import get_recent_events
     from fsm_service import get_current_state
-    
+
     # Check if we can actually reach the DB
     _conn = get_db_connection()
     if _conn:
@@ -187,6 +187,7 @@ if psutil:
         net_stats['last_out'] = initial_io.bytes_sent
     except: pass
 
+
 def get_db_data_safely(func, default=[]):
     if not DB_AVAILABLE: return default
     try:
@@ -196,6 +197,7 @@ def get_db_data_safely(func, default=[]):
         print(f"DB Fetch Error in {func.__name__}: {e}")
         return default
 
+
 def get_process_list():
     if not psutil: return []
     cache_age = time.time() - snapshot_cache['processes']['ts']
@@ -204,19 +206,19 @@ def get_process_list():
 
     procs = []
     # Keep process sampling small to avoid heavy dashboard refreshes.
-    for p in sorted(psutil.process_iter(['pid', 'name', 'username', 'cpu_percent', 'memory_percent']), 
+    for p in sorted(psutil.process_iter(['pid', 'name', 'username', 'cpu_percent', 'memory_percent']),
                     key=lambda x: x.info['cpu_percent'] or 0, reverse=True)[:15]:
         try:
             info = p.info
             name_lower = (info['name'] or '').lower()
-            
+
             # Simple Behavioral Detection Score
             threat_level = "LOW"
             if any(s in name_lower for s in SUSPICIOUS_NAMES):
                 threat_level = "HIGH" if info['cpu_percent'] > 5 else "MEDIUM"
             if info['cpu_percent'] > 25:
                 threat_level = "MEDIUM" if threat_level == "LOW" else "CRITICAL"
-            
+
             procs.append({
                 'pid': info['pid'],
                 'name': info['name'],
@@ -230,6 +232,7 @@ def get_process_list():
     snapshot_cache['processes'] = {'data': procs, 'ts': time.time()}
     return procs
 
+
 def get_real_resources():
     if not psutil:
         return {
@@ -240,20 +243,21 @@ def get_real_resources():
     cache_age = time.time() - snapshot_cache['resources']['ts']
     if cache_age < 4 and snapshot_cache['resources']['data']:
         return snapshot_cache['resources']['data']
-    
+
     cpu_util = psutil.cpu_percent(interval=None)
     mem = psutil.virtual_memory()
     boot_time = psutil.boot_time()
     uptime_str = time.strftime('%H:%M:%S', time.gmtime(time.time() - boot_time))
 
     resources = {
-        'cpu': {'util': cpu_util, 'freq': int(psutil.cpu_freq().current if psutil.cpu_freq() else 3400), 
+        'cpu': {'util': cpu_util, 'freq': int(psutil.cpu_freq().current if psutil.cpu_freq() else 3400),
                 'procs': len(psutil.pids()), 'uptime': uptime_str},
         'memory': {'in_use': round(mem.used / (1024**3), 1), 'avail': round(mem.available / (1024**3), 1),
                    'commit': round((mem.used + 1.5*1024**3) / (1024**3), 1), 'cached': round(getattr(mem, 'cached', 0) / (1024**3), 1)}
     }
     snapshot_cache['resources'] = {'data': resources, 'ts': time.time()}
     return resources
+
 
 def update_network_stats():
     """Refresh counters from psutil; rate is bytes/sec over elapsed window (min ~80ms)."""
@@ -876,6 +880,7 @@ def network_poll_thread():
             print(f"Network poll emit error: {e}")
         socketio.sleep(1.25)
 
+
 def build_dashboard_snapshot(current_state):
     active_alerts = get_db_data_safely(get_active_alerts, [])
     recent_events = get_db_data_safely(lambda: get_recent_events(8), [])
@@ -942,7 +947,7 @@ def build_dashboard_snapshot(current_state):
         state_history = fetch_query("SELECT previous_state, new_state, reason, changed_at FROM FSM_State_History ORDER BY changed_at DESC LIMIT 5") or []
         for item in state_history:
             if hasattr(item.get('changed_at'), 'strftime'): item['changed_at'] = item['changed_at'].strftime('%H:%M:%S')
-        
+
         res = fetch_query("SELECT COUNT(*) as cnt FROM Events WHERE event_type IN ('RESPONSE_ACTION', 'PROCESS_KILLED') AND timestamp >= NOW() - INTERVAL 1 DAY", fetchall=False)
         kill_cnt = res['cnt'] if res and 'cnt' in res else 0
         resolved_res = fetch_query("SELECT COUNT(*) as cnt FROM Alerts WHERE is_resolved = TRUE", fetchall=False)
@@ -1192,6 +1197,7 @@ def make_snapshot_signature(snapshot):
     }
     return json.dumps(slim_snapshot, sort_keys=True)
 
+
 def background_thread():
     last_state, last_alert_id = 'NORMAL', 0
     metrics_emit_counter = 0
@@ -1252,6 +1258,7 @@ def background_thread():
         # Slightly slower loop reduces UI churn under heavy event load.
         socketio.sleep(3)
 
+
 @socketio.on('request_scan')
 def handle_scan():
     socketio.emit('scan_start')
@@ -1259,6 +1266,7 @@ def handle_scan():
     time.sleep(1.5)
     socketio.emit('scan_complete', {'message': 'System scan finished. No immediate threats found.'})
     _debug_log('scan_complete')
+
 
 @socketio.on('kill_process')
 def handle_kill(data):
@@ -1304,6 +1312,7 @@ def handle_kill(data):
     except Exception as e:
         socketio.emit('alert_msg', {'type': 'error', 'text': f'Failed to kill {pid}: {str(e)}'})
         _debug_log('kill_process_error', {'pid': pid, 'name': name, 'error': str(e)})
+
 
 @app.before_request
 def require_dashboard_login():
@@ -1450,9 +1459,11 @@ def logout():
 def hero():
     return render_template('hero.html')
 
+
 @app.route('/demo')
 def demo():
     return render_template('demo.html')
+
 
 @app.route('/dashboard')
 def dashboard():
@@ -1870,4 +1881,4 @@ if __name__ == '__main__':
                     "Check excluded ranges: netsh interface ipv4 show excludedportrange protocol=tcp"
                 )
                 raise _last_err
-            print(f"    Trying next candidate…")
+            print("    Trying next candidate…")
