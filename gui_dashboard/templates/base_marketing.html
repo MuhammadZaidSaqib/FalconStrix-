@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FalconStrix - Advanced Linux HIDRS{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='marketing.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="{{ url_for('hero') }}" class="nav-brand">
+            Falcon<span>Strix</span>
+        </a>
+        <div class="nav-links">
+            <a href="{{ url_for('hero') }}#problem" class="nav-link">Platform</a>
+            <a href="{{ url_for('demo') }}" class="nav-link">Demo</a>
+            <a href="{{ url_for('hero') }}#pricing" class="nav-link">Pricing</a>
+            <a href="{{ url_for('hero') }}#about" class="nav-link">About</a>
+        </div>
+        <div class="nav-actions" id="auth-buttons" style="display: flex; align-items: center; gap: 1rem;">
+            <button id="theme-toggle" class="btn-outline" style="padding: 0.4rem 0.8rem; border-radius: 50%; font-size: 1.2rem; border: none;" title="Toggle Theme">🌓</button>
+            <!-- Clerk mounts here or fallback buttons -->
+            <button id="clerk-sign-in" class="btn-outline" style="display: none;">Sign In</button>
+            <button id="clerk-sign-up" class="btn-primary" style="display: none;">Get Started</button>
+            <a href="{{ url_for('login') }}" class="btn-outline" id="fallback-login">Dashboard Login</a>
+        </div>
+    </nav>
+
+    {% block content %}
+    {% endblock %}
+
+    <footer>
+        <p>&copy; 2026 FalconStrix. Advanced Linux Host Intrusion Detection & Response System.</p>
+    </footer>
+
+    <!-- Theme Toggle Script -->
+    <script>
+        const themeToggle = document.getElementById('theme-toggle');
+        const currentTheme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        
+        themeToggle.addEventListener('click', () => {
+            let theme = document.documentElement.getAttribute('data-theme');
+            if (theme === 'dark') {
+                theme = 'light';
+            } else {
+                theme = 'dark';
+            }
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+        });
+    </script>
+
+    <!-- Clerk Integration Script -->
+    <script>
+      const clerkPubKey = '{{ config.get("CLERK_PUBLISHABLE_KEY", "") }}';
+      
+      if (clerkPubKey) {
+          const script = document.createElement('script');
+          script.setAttribute('data-clerk-publishable-key', clerkPubKey);
+          script.async = true;
+          script.src = `https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
+          script.crossOrigin = 'anonymous';
+          script.addEventListener('load', async function () {
+              await window.Clerk.load();
+              const authDiv = document.getElementById('auth-buttons');
+              authDiv.innerHTML = ''; // clear fallbacks
+
+              if (window.Clerk.user) {
+                  // User is logged in via Clerk
+                  const userBtn = document.createElement('div');
+                  authDiv.appendChild(userBtn);
+                  window.Clerk.mountUserButton(userBtn, {
+                     afterSignOutUrl: window.location.href
+                  });
+                  const dashBtn = document.createElement('a');
+                  dashBtn.href = "{{ url_for('dashboard') }}";
+                  dashBtn.className = 'btn-primary';
+                  dashBtn.innerText = 'Go to Dashboard';
+                  dashBtn.style.marginLeft = '1rem';
+                  authDiv.appendChild(dashBtn);
+              } else {
+                  // User not logged in
+                  const signInBtn = document.createElement('button');
+                  signInBtn.className = 'btn-outline';
+                  signInBtn.innerText = 'Sign In';
+                  signInBtn.onclick = () => window.Clerk.openSignIn();
+                  authDiv.appendChild(signInBtn);
+
+                  const signUpBtn = document.createElement('button');
+                  signUpBtn.className = 'btn-primary';
+                  signUpBtn.innerText = 'Get Started';
+                  signUpBtn.style.marginLeft = '1rem';
+                  signUpBtn.onclick = () => window.Clerk.openSignUp();
+                  authDiv.appendChild(signUpBtn);
+              }
+          });
+          document.body.appendChild(script);
+      }
+    </script>
+</body>
+</html>
