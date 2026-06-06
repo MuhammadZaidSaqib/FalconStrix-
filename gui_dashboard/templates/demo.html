@@ -1,0 +1,36 @@
+{% extends "base_marketing.html" %}
+
+{% block title %}FalconStrix - Interactive Demo{% endblock %}
+
+{% block content %}
+<div class="demo-container">
+    <div style="text-align: center; margin-bottom: 3rem;">
+        <h1 style="font-size: 3rem; margin-bottom: 1rem; color: var(--text-main);">Experience FalconStrix</h1>
+        <p style="color: var(--text-muted); font-size: 1.1rem; max-width: 600px; margin: 0 auto;">
+            Watch how the C++ OS engine detects a simulated malicious process and the Python FSM automatically escalates to a LOCKED state to terminate the threat.
+        </p>
+    </div>
+
+    <div class="demo-window">
+        <div class="demo-header">
+            <div class="demo-dot red"></div>
+            <div class="demo-dot yellow"></div>
+            <div class="demo-dot green"></div>
+            <div style="color: #666; font-size: 0.8rem; margin-left: 1rem; font-family: monospace;">falconstrix-soc-dashboard</div>
+        </div>
+        
+        <!-- Animated Mockup / Demo Content -->
+        <div style="padding: 3rem; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #0a0a0a;">
+            <div style="font-size: 4rem; margin-bottom: 1rem; color: var(--primary-accent);">🛡️</div>
+            <h2 style="margin-bottom: 1rem;">Live Simulation Environment</h2>
+            <p style="color: #888; text-align: center; max-width: 500px; margin-bottom: 2rem;">
+                To interact with the live dashboard, you need to sign in to a provisioned instance or run the project locally.
+            </p>
+            <div style="display: flex; gap: 1rem;">
+                <a href="{{ url_for('login') }}" class="btn-primary">Go to Live Dashboard</a>
+                <a href="https://github.com/MuhammadZaidSaqib/FalconStrix-" target="_blank" class="btn-outline">Read the Setup Guide</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
