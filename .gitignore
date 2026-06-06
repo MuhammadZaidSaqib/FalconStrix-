@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+.eggs/
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Environment / Secrets
+.env
+*.env.local
+
+# Runtime / Generated files
+backend/hidrs_events.pipe
+*.pipe
+*.log
+kill_debug.log
+gui_dashboard/kill_debug.log
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
