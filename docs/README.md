@@ -7,6 +7,7 @@ For a complete Kali Linux setup walkthrough, see `SETUP_KALI.md`.
 - a Python backend for event ingestion, persistence, and FSM orchestration,
 - a C++ engine for low-level monitoring and response workflows,
 - a real-time SOC-style Flask dashboard for analysts,
+- a modern marketing landing page with Clerk authentication,
 - and red-team simulation scripts for end-to-end testing.
 
 It is designed for practical security demos, academic projects, and SOC workflow experimentation on Windows/Linux labs.
@@ -21,6 +22,10 @@ It is designed for practical security demos, academic projects, and SOC workflow
 - Live Alerts, Resolved Cases, Terminated Processes, and User Activity visibility
 - CSV and professional PDF report exports (dashboard + audit sections)
 - Educational OS concept visualizations (process, threads, sync, IPC, signals, resources)
+- **SIGKILL automated process termination** on critical threshold breach
+- **Syscall monitoring** and IPC telemetry via named pipes
+- **Zero-trust architecture** with Clerk-based authentication on the marketing site
+- **Dark / Light mode** responsive landing page
 
 ---
 
@@ -36,6 +41,9 @@ FalconStrix follows a layered architecture:
    - Response logic performs containment/termination based on policy/state.
 4. **Dashboard Layer**
    - Flask + Socket.IO provides real-time monitoring and analyst controls.
+5. **Marketing / Auth Layer**
+   - A public-facing hero page with problem/solution overview, pricing, tech stack,
+     and Clerk-powered sign-in that gates access to the SOC dashboard.
 
 High-level flow:
 
@@ -45,11 +53,13 @@ High-level flow:
 
 ## Tech Stack
 
-- **Backend**: Python, Flask, Flask-SocketIO
+- **Backend**: Python 3, Flask, Flask-SocketIO
+- **Engine**: C++17 (Linux-focused runtime path)
 - **Data**: MySQL/MariaDB
-- **Engine**: C++ (Linux-focused runtime path)
 - **Frontend**: HTML/CSS/JavaScript (real-time updates + visualizations)
+- **Auth**: Clerk (JWT-based, marketing site gate)
 - **Reporting**: CSV + PDF (ReportLab)
+- **IPC**: Named pipes + Linux signals (SIGKILL, SIGTERM)
 
 ---
 
@@ -60,6 +70,7 @@ High-level flow:
 - **Database**: MySQL/MariaDB server
 - **Compiler** (Linux/C++ path): `g++` with pthread support
 - **Terminal multiplexer** (Linux quick-start): `tmux`
+- **Clerk account** (optional, for marketing site auth): https://clerk.com
 
 ---
 
@@ -93,7 +104,19 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-### 3) C++ Engine Build (Linux path)
+### 3) Environment Variables
+
+Copy `.env.example` to `.env` and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+Key variables:
+- `CLERK_PUBLISHABLE_KEY` — your Clerk frontend API key (for marketing site auth)
+- `FALCON_SECRET_KEY` — Flask session secret
+
+### 4) C++ Engine Build (Linux path)
 
 ```bash
 cd os_engine_cpp
@@ -150,8 +173,10 @@ python gui_dashboard\app.py
 python3 gui_dashboard/app.py
 ```
 
-Dashboard URL:
-- `http://127.0.0.1:5001`
+URLs:
+- **Landing page**: `http://127.0.0.1:5001`
+- **SOC Dashboard**: `http://127.0.0.1:5001/dashboard`
+- **Demo page**: `http://127.0.0.1:5001/demo`
 
 ### C) C++ Engine (Optional / Linux)
 
@@ -208,10 +233,12 @@ PDF reports include structured sections and severity-aware coloring for quick tr
   - ensure dashboard service restarted
 - If API route returns 404 after code changes:
   - stop old `gui_dashboard\app.py` process and restart
+- If Clerk auth buttons do not appear on the landing page:
+  - ensure `CLERK_PUBLISHABLE_KEY` is set in your `.env` file
 
 ---
 
 ## Project Status
 
-FalconStrix is an actively evolving SOC-style platform.  
+FalconStrix is an actively evolving SOC-style platform.
 Contributions and hardening improvements are welcome.
