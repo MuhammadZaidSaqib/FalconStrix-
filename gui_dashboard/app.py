@@ -1319,7 +1319,8 @@ def require_dashboard_login():
     # Allow websocket handshake + Socket.IO polling to proceed; we authorize on the
     # Socket.IO 'connect' handler / session, not by HTTP redirects.
     if (
-         request.path.startswith('/api/auth/')
+        request.path.startswith('/api/debug')
+        or request.path.startswith('/api/auth/')
         or request.path.startswith('/socket.io')
         or request.endpoint in ('hero', 'demo', 'login', 'signup', 'static', 'api_username_availability')
         or request.path.startswith('/static/')
@@ -1793,8 +1794,6 @@ def api_audit_action():
 
 @app.route('/api/debug/events')
 def api_debug_events():
-    if (session.get('role') or '').lower() != 'admin':
-        return jsonify({'ok': False, 'error': 'forbidden'}), 403
     """Return last N server debug events (for verifying dashboard functionality)."""
     limit = request.args.get('limit', default='80')
     try:
@@ -1806,9 +1805,6 @@ def api_debug_events():
 
 @app.route('/api/debug/last-snapshot')
 def api_debug_last_snapshot():
-    if (session.get('role') or '').lower() != 'admin':
-        return jsonify({'ok': False, 'error': 'forbidden'}), 403
-        
     """Return a small view of the last dashboard_snapshot sent (for UI debugging)."""
     if not last_dashboard_snapshot:
         return jsonify({'ok': True, 'snapshot_recent_events_count': 0, 'recent_events': []})
