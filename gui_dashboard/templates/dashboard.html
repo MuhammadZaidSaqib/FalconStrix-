@@ -1730,9 +1730,15 @@ void trigger_response(int pid) {
                 <li>Critical/High: 0 / 0</li>
                 <li>Next step: open Live Alerts and solve cases</li>
             </ul>
+            <button id="clearAuthLockoutBtn" class="btn-danger" style="display:none;">
+                Clear Auth Lockout (Admin)
+            </button>
             <div class="def-overlay-actions">
                 <button type="button" class="def-overlay-btn def-overlay-btn--primary" id="def-overlay-open-alerts">Open Live Alerts</button>
                 <button type="button" class="def-overlay-btn" id="def-overlay-open-resolved">Open Resolved Cases</button>
+                <button id="def-overlay-clear-lockout" class="btn-danger" style="display:none;">
+                    Clear Auth Lockout (Admin)
+                </button>
             </div>
         </div>
     </div>

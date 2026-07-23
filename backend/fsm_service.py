@@ -9,6 +9,13 @@ def get_current_state():
         return res['current_state']
     return 'NORMAL'
 
+def get_last_lock_reason():
+    query = "SELECT reason FROM FSM_State_History WHERE new_state = 'LOCKED' ORDER BY changed_at DESC LIMIT 1"
+    res = fetch_query(query, fetchall=False)
+    if res:
+        return res['reason']
+    return ''
+
 def update_fsm_state(new_state, reason, trigger_active_defense=True):
     """
     Transition FSM. For auth-only lockouts (e.g. failed logins), pass
@@ -76,14 +83,21 @@ def maybe_unlock_locked_state(actor_username='unknown'):
     Admin-only workflow uses this after resolving alerts:
     LOCKED -> NORMAL only when there are no unresolved alerts remaining.
     """
-    unresolved_q = "SELECT COUNT(*) AS cnt FROM Alerts WHERE is_resolved = FALSE"
-    unresolved = fetch_query(unresolved_q, fetchall=False)
-    unresolved_cnt = int(unresolved['cnt']) if unresolved and unresolved.get('cnt') is not None else 0
     curr = get_current_state()
     if curr != 'LOCKED':
         return {'changed': False, 'reason': f'FSM is {curr}, no lock-clear needed'}
+
+    last_reason = get_last_lock_reason()
+    if 'Dashboard auth:' in last_reason:
+        return {'changed': False, 'reason': 'Auth lockout requires manual admin clear'}
+
+    unresolved_q = "SELECT COUNT(*) AS cnt FROM Alerts WHERE is_resolved = FALSE"
+    unresolved = fetch_query(unresolved_q, fetchall=False)
+    unresolved_cnt = int(unresolved['cnt']) if unresolved and unresolved.get('cnt') is not None else 0
+
     if unresolved_cnt > 0:
         return {'changed': False, 'reason': f'{unresolved_cnt} unresolved alert(s) remain'}
+
     reason = f"Admin '{actor_username}' resolved active cases and cleared LOCKED state"
     update_fsm_state('NORMAL', reason, trigger_active_defense=False)
     return {'changed': True, 'reason': reason}
