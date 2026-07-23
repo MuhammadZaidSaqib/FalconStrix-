@@ -1508,6 +1508,8 @@ def api_fsm_reevaluate():
     Force an FSM recalculation and unlock check.
     Used by LOCKED overlay when counts are shown as zero.
     """
+    if (session.get('role') or '').lower() != 'admin':
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 401
     try:
         from fsm_service import tick_fsm, maybe_unlock_locked_state
         actor = session.get('username') or 'system'
