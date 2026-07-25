@@ -78,6 +78,7 @@
                 <div class="header-status">
                     <span class="header-user-pill" title="Signed-in operator">{{ username or 'Operator' }}</span>
                     <form method="post" action="{{ url_for('logout') }}" class="header-logout-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn-logout">Sign out</button>
                     </form>
                     <button class="btn-primary" id="btn-generate-report" style="margin-right: 15px;">📥 Generate Report</button>
@@ -1730,13 +1731,13 @@ void trigger_response(int pid) {
                 <li>Critical/High: 0 / 0</li>
                 <li>Next step: open Live Alerts and solve cases</li>
             </ul>
-            <button id="clearAuthLockoutBtn" class="btn-danger" style="display:none;">
+            <button id="clearAuthLockoutBtn" class="btn-danger" style="display:none; margin: 15px auto 0 auto;">
                 Clear Auth Lockout (Admin)
             </button>
             <div class="def-overlay-actions">
                 <button type="button" class="def-overlay-btn def-overlay-btn--primary" id="def-overlay-open-alerts">Open Live Alerts</button>
                 <button type="button" class="def-overlay-btn" id="def-overlay-open-resolved">Open Resolved Cases</button>
-                <button id="def-overlay-clear-lockout" class="btn-danger" style="display:none;">
+                <button id="def-overlay-clear-lockout" class="def-overlay-btn def-overlay-btn--danger" style="display:none;">
                     Clear Auth Lockout (Admin)
                 </button>
             </div>
@@ -1745,6 +1746,7 @@ void trigger_response(int pid) {
 
     <script>
         window.FALCON_USER_ROLE = "{{ (user_role or 'user')|e }}";
+        window.FALCON_CSRF_TOKEN = "{{ csrf_token() }}";
         window.FALCON_USERNAME = "{{ (username or '')|e }}";
     </script>
     <script src="{{ url_for('static', filename='script.js', v='20260417a') }}"></script>

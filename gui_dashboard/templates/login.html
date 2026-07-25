@@ -72,12 +72,13 @@
                     {% endif %}
                 {% endwith %}
                 <form class="login-form" method="post" action="{{ url_for('login') }}" autocomplete="on">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <label class="login-label" for="username">Username</label>
                     <input class="login-input" type="text" id="username" name="username" required autocomplete="username" autofocus placeholder="operator.id">
-
+                
                     <label class="login-label" for="password">Password</label>
                     <input class="login-input" type="password" id="password" name="password" required autocomplete="current-password" placeholder="enter secure phrase">
-
+                
                     <button type="submit" class="login-submit">Authenticate</button>
                 </form>
                 <p class="login-alt">No account? <a href="/signup">Create one</a></p>

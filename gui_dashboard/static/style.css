@@ -3647,3 +3647,30 @@ header {
     border-color: rgba(255, 77, 87, 0.35);
     color: var(--text-bright);
 }
+
+/* ═══ DANGER BUTTONS FOR LOCKOUT CLEAR ═════════════════════════════════════ */
+.btn-danger {
+    background: linear-gradient(135deg, #ff4d5a, #b81422);
+    color: #fff;
+    border: 1px solid rgba(255, 77, 90, 0.4);
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(184, 20, 34, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.btn-danger:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(184, 20, 34, 0.4);
+    filter: brightness(1.1);
+}
+.def-overlay-btn--danger {
+    border-color: rgba(255, 77, 90, 0.6);
+    background: rgba(255, 77, 90, 0.16);
+    color: #ffd9db;
+}
+.def-overlay-btn--danger:hover {
+    background: rgba(255, 77, 90, 0.3);
+}
+
