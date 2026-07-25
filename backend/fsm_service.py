@@ -102,6 +102,21 @@ def maybe_unlock_locked_state(actor_username='unknown'):
     update_fsm_state('NORMAL', reason, trigger_active_defense=False)
     return {'changed': True, 'reason': reason}
 
+def clear_auth_lockout(actor_username='unknown'):
+    """
+    Explicit, admin-only action to clear a LOCKED state caused by a
+    dashboard authentication lockout. Unlike maybe_unlock_locked_state(),
+    this does not check alert counts or lock reason — it's a deliberate
+    override, meant to be called only from an admin-gated route.
+    """
+    curr = get_current_state()
+    if curr != 'LOCKED':
+        return {'changed': False, 'reason': f'FSM is {curr}, no lock-clear needed'}
+
+    reason = f"Admin '{actor_username}' manually cleared auth lockout"
+    update_fsm_state('NORMAL', reason, trigger_active_defense=False)
+    return {'changed': True, 'reason': reason}
+
 def hardware_led_indicator(state):
     """ Simulates physical FSM hardware LEDs via print statements """
     if state == 'NORMAL':

@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const canResolveCases = true;
 
     const socket = io();
+    const csrfHeader = () => ({ 'X-CSRFToken': window.FALCON_CSRF_TOKEN || '' });
 
     // ═══ Element References ══════════════════════════════════════════════
     const startupScreen = document.getElementById('startup-screen');
@@ -28,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const defOverlayList = document.getElementById('def-overlay-list');
     const defOverlayOpenAlertsBtn = document.getElementById('def-overlay-open-alerts');
     const defOverlayOpenResolvedBtn = document.getElementById('def-overlay-open-resolved');
+    const defOverlayClearLockoutBtn = document.getElementById('def-overlay-clear-lockout');
     const alertList = document.getElementById('alert-list-table');
     const eventList = document.getElementById('event-list');
     const stateHistoryList = document.getElementById('state-history-list');
@@ -1583,6 +1585,26 @@ document.addEventListener("DOMContentLoaded", () => {
             if (overlay) overlay.classList.add('hidden');
             switchPage('resolved-cases');
         });
+        if (defOverlayClearLockoutBtn) {
+            if (currentUserRole === 'admin') {
+                defOverlayClearLockoutBtn.style.display = 'inline-block';
+            }
+            defOverlayClearLockoutBtn.addEventListener('click', () => {
+                defOverlayClearLockoutBtn.disabled = true;
+                fetch('/api/fsm/clear-auth-lockout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...csrfHeader() },
+                    credentials: 'same-origin',
+                })
+                    .then((r) => r.json())
+                    .then((payload) => {
+                        if (payload && payload.snapshot) {
+                            applyGlobalStateUi(payload.snapshot.state);
+                        }
+                    })
+                    .finally(() => { defOverlayClearLockoutBtn.disabled = false; });
+            });
+        }
     }
     // Concept cards can jump directly to their matching concept pages.
     document.querySelectorAll('.concept-card').forEach(card => {
@@ -1807,7 +1829,7 @@ document.addEventListener("DOMContentLoaded", () => {
             lockAutoReevalInFlight = true;
             fetch('/api/fsm/reevaluate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 credentials: 'same-origin',
             })
                 .then((r) => {
@@ -1942,7 +1964,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const res = await fetch(`/api/alerts/${idNum}/resolve`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 credentials: 'same-origin',
             });
             const raw = await res.text();
@@ -2026,7 +2048,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const res = await fetch('/api/alerts/manual', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 credentials: 'same-origin',
                 body: JSON.stringify({
                     severity: selectedSeverity,
@@ -2310,7 +2332,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             await fetch('/api/audit/action', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
                 credentials: 'same-origin',
                 body: JSON.stringify({ event_type: eventType, description }),
             });

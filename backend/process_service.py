@@ -62,7 +62,7 @@ def active_defense():
             logging.warning("[SOC] Command FIFO send error (%s). Falling back to direct kill.", ex)
 
     # Windows fallback (or if OS engine command FIFO fails): direct kills + log.
-    kill_sig = getattr(signal, 'SIGKILL', 9)  # 9 is SIGKILL on POSIX
+    kill_sig = signal.SIGKILL if os.name != 'nt' else signal.SIGTERM  # 9 is SIGKILL on POSIX
     for proc in bad_procs:
         pid = proc["pid"]
         name = proc["process_name"]
@@ -74,11 +74,10 @@ def active_defense():
                 "INSERT INTO Events (event_type, description, source) VALUES (%s, %s, %s)",
                 ("RESPONSE_ACTION", msg, "Response_Engine"),
             )
-        except ProcessLookupError:
-            pass
-        except PermissionError:
-            print(f"[!] RESPONSE ENGINE: Permission denied to kill PID {pid}")
-
+            
+        except Exception as ose:
+            print(f"[!] RESPONSE ENGINE: Could not terminate PID {pid} ({ose}), skipping")
+    
     from fsm_service import tick_fsm
     tick_fsm()
     # If defensive response has resolved all active cases, clear LOCKED -> NORMAL.
@@ -120,7 +119,7 @@ def resolve_alert_case(alert_id, actor_username='unknown', actor_role='user', ac
     pname = row.get('process_name') or 'unknown'
     response_detail = 'Manual case resolution'
     responded = False
-    kill_sig = getattr(signal, 'SIGKILL', 9)  # 9 is SIGKILL on POSIX
+    kill_sig = signal.SIGKILL if os.name != 'nt' else signal.SIGTERM  # 9 is SIGKILL on POSIX
 
     if pid is not None:
         # Prefer Linux FIFO command -> C++ response_engine does termination and audit.

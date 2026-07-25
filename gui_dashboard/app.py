@@ -73,12 +73,19 @@ if DB_AVAILABLE:
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FALCON_SECRET_KEY', 'soc_secret_change_me')
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
+
+from flask_wtf import CSRFProtect
+csrf = CSRFProtect(app)
+
 # On Windows, eventlet binds differently and often collides on :5000; threading is stable for dev.
 _socketio_kw = {'cors_allowed_origins': '*'}
 if sys.platform == 'win32':
     _socketio_kw['async_mode'] = 'threading'
 socketio = SocketIO(app, **_socketio_kw)
+
+
 
 # Auth-related UI events when DB is off (ring buffer for User Activity widget)
 auth_activity_ring = deque(maxlen=40)
@@ -1521,7 +1528,21 @@ def api_fsm_reevaluate():
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+@app.route('/api/fsm/clear-auth-lockout', methods=['POST'])
+def api_fsm_clear_auth_lockout():
+    """Admin-only: manually clear a LOCKED state caused by a dashboard auth lockout."""
+    if (session.get('role') or '').lower() != 'admin':
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    try:
+        from fsm_service import clear_auth_lockout
+        result = clear_auth_lockout(actor_username=session.get('username'))
+        st = get_effective_fsm_state()
+        snap = build_dashboard_snapshot(st)
+        return jsonify({'ok': True, 'result': result, 'state': st, 'snapshot': snap})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
+        
 @app.route('/api/reports/dashboard.pdf')
 def api_report_dashboard_pdf():
     try:
