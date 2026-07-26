@@ -98,7 +98,7 @@ def maybe_unlock_locked_state(actor_username='unknown'):
     if unresolved_cnt > 0:
         return {'changed': False, 'reason': f'{unresolved_cnt} unresolved alert(s) remain'}
 
-    reason = f"Admin '{actor_username}' resolved active cases and cleared LOCKED state"
+    reason = f"admin '{actor_username}' resolved active cases and cleared LOCKED state"
     update_fsm_state('NORMAL', reason, trigger_active_defense=False)
     return {'changed': True, 'reason': reason}
 
@@ -113,7 +113,7 @@ def clear_auth_lockout(actor_username='unknown'):
     if curr != 'LOCKED':
         return {'changed': False, 'reason': f'FSM is {curr}, no lock-clear needed'}
 
-    reason = f"Admin '{actor_username}' manually cleared auth lockout"
+    reason = f"admin '{actor_username}' manually cleared auth lockout"
     update_fsm_state('NORMAL', reason, trigger_active_defense=False)
     return {'changed': True, 'reason': reason}
 

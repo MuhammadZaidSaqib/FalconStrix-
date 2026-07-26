@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,18 +8,23 @@
     <title>Create account - FalconStrix</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='falconstrix-logo.svg') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body class="theme-normal login-body">
     <div class="login-shell">
         <div class="login-grid">
             <section class="login-intel-panel" aria-label="Account registration">
                 <div class="hero-logo-badge">
-                    <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="FalconStrix logo" class="brand-logo brand-logo--hero">
+                    <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="FalconStrix logo"
+                        class="brand-logo brand-logo--hero">
                 </div>
                 <div class="login-kicker">Onboarding</div>
                 <h1 class="login-hero-title">FalconStrix<br>Operator accounts</h1>
-                <p class="login-hero-copy">Create a dashboard login tied to SOC activity. Sign-ins, sign-outs, and registration appear in <strong>User Activity</strong> with your username.</p>
+                <p class="login-hero-copy">Create a dashboard login tied to SOC activity. Sign-ins, sign-outs, and
+                    registration appear in <strong>User Activity</strong> with your username.</p>
                 <div class="login-metrics">
                     <div class="login-metric-card">
                         <span class="metric-label">Policy</span>
@@ -37,40 +43,49 @@
                 <div class="login-brand">
                     <div class="login-badge">New operator</div>
                     <div class="login-brand-row">
-                        <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="FalconStrix logo" class="brand-logo brand-logo--auth">
+                        <img src="{{ url_for('static', filename='falconstrix-logo.svg') }}" alt="FalconStrix logo"
+                            class="brand-logo brand-logo--auth">
                         <span class="brand-text">FalconStrix</span>
                     </div>
                     <p class="login-tagline">Create your account</p>
                 </div>
                 {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="login-flash login-flash--{{ category }}" role="alert">{{ message }}</div>
-                        {% endfor %}
-                    {% endif %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="login-flash login-flash--{{ category }}" role="alert">{{ message }}</div>
+                {% endfor %}
+                {% endif %}
                 {% endwith %}
                 <form class="login-form" method="post" action="/signup" autocomplete="on">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <label class="login-label" for="username">Username</label>
-                    <input class="login-input" type="text" id="username" name="username" required minlength="3" maxlength="32" autocomplete="username" autofocus placeholder="operator.id">
+                    <input class="login-input" type="text" id="username" name="username" required minlength="3"
+                        maxlength="32" autocomplete="username" autofocus placeholder="operator.id">
                     <p id="username-availability" class="login-hint" style="margin:6px 0 10px; min-height: 1.2em;"></p>
 
                     <label class="login-label" for="password">Password</label>
                     <div class="password-wrap">
-                        <input class="login-input" type="password" id="password" name="password" required minlength="8" autocomplete="new-password" placeholder="8+ chars, symbol, number">
-                        <button type="button" class="password-toggle" data-toggle-password="password" aria-label="Show password" title="Show/Hide password">👁</button>
+                        <input class="login-input" type="password" id="password" name="password" required minlength="8"
+                            autocomplete="new-password" placeholder="8+ chars, symbol, number">
+                        <button type="button" class="password-toggle" data-toggle-password="password"
+                            aria-label="Show password" title="Show/Hide password">👁</button>
                     </div>
 
                     <label class="login-label" for="password_confirm">Confirm password</label>
                     <div class="password-wrap">
-                        <input class="login-input" type="password" id="password_confirm" name="password_confirm" required minlength="8" autocomplete="new-password" placeholder="repeat password">
-                        <button type="button" class="password-toggle" data-toggle-password="password_confirm" aria-label="Show confirm password" title="Show/Hide password">👁</button>
+                        <input class="login-input" type="password" id="password_confirm" name="password_confirm"
+                            required minlength="8" autocomplete="new-password" placeholder="repeat password">
+                        <button type="button" class="password-toggle" data-toggle-password="password_confirm"
+                            aria-label="Show confirm password" title="Show/Hide password">👁</button>
                     </div>
 
                     <button type="submit" class="login-submit">Create account</button>
                 </form>
                 <div class="login-footnote">
                     <p class="login-alt">Already have an account? <a href="{{ url_for('login') }}">Sign in</a></p>
-                    <p class="login-hint">Admin account <code>admin</code> is reserved. Password must include a symbol and number, and must not contain your username. Set <code>FALCON_DISABLE_SIGNUP=1</code> to close registration in production.</p>
+                    <p class="login-hint">Admin account <code>admin</code> is reserved. Password must include a symbol
+                        and number, and must not contain your username. Set <code>FALCON_DISABLE_SIGNUP=1</code> to
+                        close registration in production.</p>
                 </div>
             </section>
         </div>
@@ -128,4 +143,5 @@
         })();
     </script>
 </body>
+
 </html>
