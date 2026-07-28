@@ -731,6 +731,7 @@ def get_resolved_cases_rows(limit=200):
                         (e.process_id IS NOT NULL AND re.process_id = e.process_id)
                         OR (re.description LIKE CONCAT('%%PID: ', p.pid, '%%'))
                         OR (re.description LIKE CONCAT('%%pid=', p.pid, '%%'))
+                        OR (re.description LIKE CONCAT('%%Alert case ', a.alert_id, '%%'))
                       )
                     ORDER BY re.timestamp DESC
                     LIMIT 1
@@ -743,6 +744,7 @@ def get_resolved_cases_rows(limit=200):
                         (e.process_id IS NOT NULL AND re.process_id = e.process_id)
                         OR (re.description LIKE CONCAT('%%PID: ', p.pid, '%%'))
                         OR (re.description LIKE CONCAT('%%pid=', p.pid, '%%'))
+                        OR (re.description LIKE CONCAT('%%Alert case ', a.alert_id, '%%'))
                       )
                     ORDER BY re.timestamp DESC
                     LIMIT 1
@@ -756,6 +758,7 @@ def get_resolved_cases_rows(limit=200):
                         re.description LIKE CONCAT('%%case #', a.alert_id, '%%')
                         OR re.description LIKE CONCAT('%%case ', a.alert_id, '%%')
                         OR re.description LIKE CONCAT('%%Alert case ', a.alert_id, '%%')
+                        
                       )
                     ORDER BY re.timestamp DESC
                     LIMIT 1

@@ -2226,6 +2226,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 '<tr><td colspan="9" style="text-align:center; padding: 20px;">No resolved cases found.</td></tr>';
             return;
         }
+        const processLabel = (r, value) => {
+            if (value != null && value !== '') return esc(value);
+            return r.trigger_event === 'MANUAL_ALERT' ? 'N/A — manual alert' : '—';
+        };
+        
         const esc = (s) =>
             String(s ?? '')
                 .replace(/&/g, '&amp;')
@@ -2241,9 +2246,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td>${esc(r.detected_at)}</td>
                 <td>${esc(r.resolved_at || '—')}</td>
                 <td>${esc(r.resolution_detail || 'Resolved flag set')}</td>
-                <td>${esc(r.process_name || '—')}</td>
-                <td>${esc(r.pid ?? '—')}</td>
-                <td>${esc(r.process_created_at || '—')}</td>
+                <td>${processLabel(r, r.process_name)}</td>
+                <td>${processLabel(r, r.pid)}</td>
+                <td>${processLabel(r, r.process_created_at)}</td>
             </tr>`
             )
             .join('');
