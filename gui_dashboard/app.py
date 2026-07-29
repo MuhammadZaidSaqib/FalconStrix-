@@ -1323,7 +1323,6 @@ def handle_kill(data):
         socketio.emit('alert_msg', {'type': 'error', 'text': f'Failed to kill {pid}: {str(e)}'})
         _debug_log('kill_process_error', {'pid': pid, 'name': name, 'error': str(e)})
 
-
 @app.before_request
 def require_dashboard_login():
     # Allow websocket handshake + Socket.IO polling to proceed; we authorize on the
@@ -1338,6 +1337,17 @@ def require_dashboard_login():
     if request.path == '/favicon.ico':
         return None
     if not session.get('user_id'):
+        return redirect(url_for('login', next=request.path))
+
+    current_version_row = fetch_query(
+        "SELECT session_version FROM Users WHERE user_id = %s",
+        (session.get('user_id'),),
+        fetchall=False,
+    )
+    current_version = current_version_row.get('session_version') if current_version_row else None
+    print(f"[DEBUG] cookie_version={session.get('session_version')!r} db_version={current_version!r}")
+    if current_version is None or current_version != session.get('session_version'):
+        session.clear()
         return redirect(url_for('login', next=request.path))
 
 
@@ -1361,6 +1371,7 @@ def login():
             session['user_id'] = user['user_id']
             session['username'] = user['username']
             session['role'] = user.get('role', 'user')
+            session['session_version'] = user.get('session_version', 1)
             ip = request.remote_addr or 'unknown'
             record_dashboard_auth_event(
                 'LOGIN',
@@ -1460,6 +1471,12 @@ def logout():
             user_id=uid,
             actor_username=un,
         )
+    if uid:
+        execute_query(
+            "UPDATE Users SET session_version = session_version + 1 WHERE user_id = %s",
+            (uid,),
+        )
+
     session.clear()
     return redirect(url_for('login'))
 
